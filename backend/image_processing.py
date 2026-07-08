@@ -28,14 +28,19 @@ def _process_canvas(raw_bytes: bytes) -> dict:
 def _process_photo(raw_bytes: bytes) -> dict:
     """
     Фото рыбки на бумаге: на листе заранее напечатан контур рыбки, ребёнок
-    его раскрасил. Нужно вырезать рыбку и убрать фон листа/стола.
+    его раскрасил. Нужно вырезать ТОЛЬКО рыбку и убрать всё лишнее —
+    лист, стол, руку, которой держат лист, ручку/карандаш рядом и т.п.
 
-    Двухэтапный подход "как в сканере документов" — надёжнее GrabCut для
-    контрастной сцены "тёмный стол / светлый лист / цветной рисунок":
-      1. Находим сам лист бумаги (по краям, как quad-документ) и делаем
-         перспективную коррекцию — так убираем стол и перекос камеры.
-      2. Внутри листа находим сам рисунок по цвету (не-белые пиксели:
-         цветная заливка или тёмный контур) — это и есть рыбка.
+    Этапы:
+      1. Находим сам лист бумаги (quad-документ) и выпрямляем перспективу —
+         убираем стол и перекос камеры.
+      2. Внутри листа собираем "рисованные" пиксели (цветная заливка + тёмный
+         контур), затем из всех найденных фигур выбираем именно рыбку:
+         крупную, ближе к центру листа, сплошную/выпуклую замкнутую фигуру.
+         Рука/ручка обычно заходят с краю кадра, они несплошные и/или сбоку —
+         такие кандидаты отсеиваются по этому же скорингу.
+      3. Заливаем выбранный контур целиком (внутренности рыбки сохраняются),
+         обрезаем и вписываем в 512×512 с прозрачным фоном.
     """
     file_bytes = np.frombuffer(raw_bytes, np.uint8)
     img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -44,27 +49,98 @@ def _process_photo(raw_bytes: bytes) -> dict:
 
     paper = _extract_paper(img_bgr)  # BGR, только сам лист (без стола)
 
-    fish_mask = _extract_drawing_mask(paper)  # 0/1 маска рыбки внутри листа
+    mask = _select_fish_mask(paper)  # умный выбор рыбки среди всех фигур
+    if mask is None or mask.sum() == 0:
+        # запасной путь — старое поведение "самое большое пятно"
+        mask = _fallback_biggest_blob(paper)
+    if mask is None or mask.sum() == 0:
+        raise ValueError("fish drawing not found on paper")
 
+    return _cutout_from_mask(paper, mask)
+
+
+def _select_fish_mask(paper_bgr: np.ndarray):
+    """Находит рыбку по её напечатанному тёмному контуру и возвращает залитую
+    0/1 маску. Ключевая идея: на листе-раскраске рыбка обведена замкнутой тёмной
+    линией, внутри которой ребёнок раскрашивает. Рука не тёмная — в кандидаты не
+    попадает вовсе; ручка/карандаш тонкие — отсекаются по площади; край листа —
+    по прилипанию ко всем сторонам кадра. Скоринг выбирает крупную, центральную,
+    сплошную замкнутую фигуру. None — если подходящего контура нет."""
+    h, w = paper_bgr.shape[:2]
+    gray = cv2.cvtColor(paper_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # тёмные линии — адаптивный порог устойчив к неровному свету/теням.
+    # Замыкаем разрывы, чтобы печатный контур рыбки стал цельным кольцом.
+    ink = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 10)
+    ink = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8), iterations=2)
+
+    contours, _ = cv2.findContours(ink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+
+    cx, cy = w / 2.0, h / 2.0
+    diag = (w * w + h * h) ** 0.5
+    frame_area = float(w * h)
+
+    best, best_score = None, -1.0
+    for c in contours:
+        area = cv2.contourArea(c)            # площадь, ЗАМКНУТАЯ контуром (= размер рыбки)
+        if area < 0.02 * frame_area:         # мелочь: ручка, точки, шум
+            continue
+        if area > 0.92 * frame_area:         # это рамка/край листа, а не рыбка
+            continue
+        m = cv2.moments(c)
+        if m["m00"] == 0:
+            continue
+        ccx, ccy = m["m10"] / m["m00"], m["m01"] / m["m00"]
+        center_dist = (((ccx - cx) ** 2 + (ccy - cy) ** 2) ** 0.5) / diag  # 0..~0.7
+
+        hull_area = cv2.contourArea(cv2.convexHull(c))
+        solidity = area / hull_area if hull_area > 0 else 0.0  # рыбка выпуклая
+
+        x, y, bw, bh = cv2.boundingRect(c)
+        touches = (x <= 1) + (y <= 1) + (x + bw >= w - 1) + (y + bh >= h - 1)
+
+        # крупная + по центру + сплошная + не липнет к нескольким краям
+        score = area * (1.0 - center_dist) * (0.4 + 0.6 * solidity) * (1.0 - 0.2 * touches)
+        if score > best_score:
+            best_score, best = score, c
+
+    if best is None:
+        return None
+
+    mask = np.zeros((h, w), np.uint8)
+    cv2.drawContours(mask, [best], -1, 1, thickness=cv2.FILLED)  # заливка сохраняет нутро рыбки
+    return mask
+
+
+def _fallback_biggest_blob(paper_bgr: np.ndarray):
+    """Запасной путь (старое поведение): самое большое цветное/тёмное пятно."""
+    fish_mask = _extract_drawing_mask(paper_bgr)
     contours, _ = cv2.findContours(fish_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        raise ValueError("fish drawing not found on paper")
+        return None
     biggest = max(contours, key=cv2.contourArea)
+    mask = np.zeros_like(fish_mask)
+    cv2.drawContours(mask, [biggest], -1, 1, thickness=cv2.FILLED)
+    return mask
 
-    clean_mask = np.zeros_like(fish_mask)
-    cv2.drawContours(clean_mask, [biggest], -1, 1, thickness=cv2.FILLED)
 
-    b, g, r = cv2.split(paper)
-    alpha = (clean_mask * 255).astype("uint8")
+def _cutout_from_mask(paper_bgr: np.ndarray, mask: np.ndarray) -> dict:
+    """По 0/1 маске вырезает рыбку из листа: RGBA с прозрачным фоном, обрезка,
+    вписывание в 512×512."""
+    b, g, r = cv2.split(paper_bgr)
+    alpha = (mask * 255).astype("uint8")
     rgba = cv2.merge([r, g, b, alpha])
 
-    ys, xs = np.where(clean_mask > 0)
+    ys, xs = np.where(mask > 0)
     y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
     cropped = rgba[y0:y1 + 1, x0:x1 + 1]
 
     pil_img = Image.fromarray(cropped, mode="RGBA")
     pil_img = _resize_contain(pil_img, TARGET_SIZE)
-
     return _finalize(pil_img)
 
 
