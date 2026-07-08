@@ -131,18 +131,112 @@ def _fallback_biggest_blob(paper_bgr: np.ndarray):
 
 def _cutout_from_mask(paper_bgr: np.ndarray, mask: np.ndarray) -> dict:
     """По 0/1 маске вырезает рыбку из листа: RGBA с прозрачным фоном, обрезка,
-    вписывание в 512×512."""
+    вписывание в 512×512. Дополнительно разворачивает рыбку так, чтобы голова
+    (широкая часть тела) оказалась справа, а хвост (узкая часть) — слева —
+    см. _orient_head_right()."""
     b, g, r = cv2.split(paper_bgr)
     alpha = (mask * 255).astype("uint8")
     rgba = cv2.merge([r, g, b, alpha])
 
-    ys, xs = np.where(mask > 0)
+    rgba = _orient_head_right(rgba, mask)
+
+    alpha2 = rgba[:, :, 3]
+    ys, xs = np.where(alpha2 > 10)
+    if len(ys) == 0:
+        raise ValueError("fish drawing empty after orientation normalization")
     y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
     cropped = rgba[y0:y1 + 1, x0:x1 + 1]
 
     pil_img = Image.fromarray(cropped, mode="RGBA")
     pil_img = _resize_contain(pil_img, TARGET_SIZE)
     return _finalize(pil_img)
+
+
+def _orient_head_right(rgba: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """
+    На фото ребёнок мог нарисовать/раскрасить рыбку в любую сторону — в
+    отличие от рисования на экране (см. app.js FISH_SHAPES), тут нет
+    фиксированного соглашения "голова слева". Чтобы Стена умела кормить
+    рыбку в рот, а не в хвост (см. Fish.mouthX в aquarium.html, который
+    просто берёт "передний край по направлению движения" и предполагает,
+    что голова всегда с одной и той же стороны спрайта), нормализуем
+    ориентацию сервером:
+
+      1. Находим главную ось тела рыбки (направление наибольшей дисперсии
+         маски, как у эллипса инерции) и поворачиваем изображение так,
+         чтобы эта ось стала горизонтальной.
+      2. У типичного рисунка рыбки тело — широкий овал (много "массы"), а
+         хвост — узкий треугольник, часто длинный. Поэтому делить силуэт
+         пополам по геометрической середине bounding box'а ненадёжно: если
+         хвост длиннее тела, середина съезжает в его сторону и часть тела
+         попадает не в ту половину. Вместо этого сравниваем расстояния от
+         центра МАССЫ (центроида маски, а не bounding box) до левого и
+         правого края: тело тяжёлое — держит центроид рядом с собой, тонкий
+         хвост почти не тянет его на себя, даже когда торчит далеко. Значит
+         ближний к центроиду край — голова, дальний — хвост.
+      3. Если голова оказалась слева — отражаем по горизонтали, чтобы она
+         была справа. Это то же соглашение "голова справа по умолчанию",
+         что уже используется для рыбок, нарисованных на экране (см.
+         sendColorBtn в app.js) — Стене не нужно ничего знать про режим,
+         оба источника рыбок после обработки выглядят одинаково.
+
+    Если тело слишком круглое/симметричное, чтобы надёжно отличить голову
+    от хвоста (мало разницы в толщине половин) — поворот всё равно
+    применяется (лишним не будет), а отражение пропускается, чтобы не
+    дёргать монетку на симметричной фигуре.
+    """
+    ys, xs = np.where(mask > 0)
+    if len(ys) < 20:
+        return rgba
+
+    pts = np.column_stack([xs, ys]).astype(np.float32)
+    mean, eigenvectors = cv2.PCACompute(pts, mean=None, maxComponents=1)
+    axis = eigenvectors[0]  # направление главной оси (unit vector)
+    angle_deg = np.degrees(np.arctan2(axis[1], axis[0]))
+
+    h, w = mask.shape[:2]
+    cx, cy = mean[0]
+
+    # холст с запасом, чтобы поворот не обрезал углы рыбки
+    diag = int(np.ceil((w ** 2 + h ** 2) ** 0.5))
+    pad_x = (diag - w) // 2 + 4
+    pad_y = (diag - h) // 2 + 4
+    padded = cv2.copyMakeBorder(rgba, pad_y, pad_y, pad_x, pad_x, cv2.BORDER_CONSTANT, value=(0, 0, 0, 0))
+    padded_mask = cv2.copyMakeBorder(mask, pad_y, pad_y, pad_x, pad_x, cv2.BORDER_CONSTANT, value=0)
+
+    center = (cx + pad_x, cy + pad_y)
+    m = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+    ph, pw = padded_mask.shape[:2]
+    rotated_rgba = cv2.warpAffine(padded, m, (pw, ph), flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0, 0))
+    rotated_mask = cv2.warpAffine(padded_mask, m, (pw, ph), flags=cv2.INTER_NEAREST, borderValue=0)
+
+    ys2, xs2 = np.where(rotated_mask > 0)
+    if len(ys2) == 0:
+        return rgba  # поворот выродил маску (не должно происходить) — не рискуем
+
+    x0, x1 = xs2.min(), xs2.max()
+    span = x1 - x0
+    if span < 4:
+        return rotated_rgba  # слишком узко для анализа
+
+    centroid_x = xs2.mean()
+    dist_to_x0 = centroid_x - x0   # чем меньше, тем ближе центр масс к левому краю
+    dist_to_x1 = x1 - centroid_x   # чем меньше, тем ближе центр масс к правому краю
+
+    if dist_to_x0 <= 0 or dist_to_x1 <= 0:
+        return rotated_rgba
+
+    # существенная асимметрия — уверенно определяем голову; иначе не отражаем
+    ratio = max(dist_to_x0, dist_to_x1) / min(dist_to_x0, dist_to_x1)
+    if ratio < 1.12:
+        return rotated_rgba  # почти симметрично (или хвост не длиннее тела) — не гадаем
+
+    # центроид ближе к x0 -> тело (голова) слева, длинный хвост тянется вправо
+    head_is_left = dist_to_x0 < dist_to_x1
+    if head_is_left:
+        rotated_rgba = cv2.flip(rotated_rgba, 1)  # отражение по горизонтали -> голова направо
+
+    return rotated_rgba
 
 
 def _extract_paper(img_bgr: np.ndarray) -> np.ndarray:
