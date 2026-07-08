@@ -324,10 +324,37 @@ function makeBackgroundTransparent(canvas, diffThreshold = 25) {
   const blurredData = bctx.getImageData(0, 0, w, h).data;
 
   const d = original.data;
-  for (let i = 0; i < d.length; i += 4) {
+
+  // Похоже-на-фон пиксели (по локальному контрасту) — но пока это только КАНДИДАТЫ.
+  // Если стереть их все подряд, пострадают и замкнутые белые области ВНУТРИ рыбки
+  // (непрокрашенный живот, глаза и т.п.) — а их трогать нельзя.
+  const isBgCandidate = new Uint8Array(w * h);
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
     const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
     const localBg = 0.299 * blurredData[i] + 0.587 * blurredData[i + 1] + 0.114 * blurredData[i + 2];
-    if (localBg - lum < diffThreshold) d[i + 3] = 0; // похоже на фон — прозрачный
+    isBgCandidate[p] = (localBg - lum < diffThreshold) ? 1 : 0;
+  }
+
+  // Заливка от краёв кадра: настоящий фон обязательно соединён с границей канваса.
+  // Всё, что похоже на фон, но окружено линиями рисунка (недостижимо от края) — не трогаем.
+  const reachable = new Uint8Array(w * h);
+  const stack = [];
+  for (let x = 0; x < w; x++) { stack.push(x); stack.push(x + (h - 1) * w); }
+  for (let y = 0; y < h; y++) { stack.push(y * w); stack.push(y * w + (w - 1)); }
+
+  while (stack.length) {
+    const p = stack.pop();
+    if (p < 0 || p >= w * h || reachable[p] || !isBgCandidate[p]) continue;
+    reachable[p] = 1;
+    const x = p % w, y = (p / w) | 0;
+    if (x > 0) stack.push(p - 1);
+    if (x < w - 1) stack.push(p + 1);
+    if (y > 0) stack.push(p - w);
+    if (y < h - 1) stack.push(p + w);
+  }
+
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    if (reachable[p]) d[i + 3] = 0; // настоящий фон, связанный с краем — прозрачный
   }
   ctx.putImageData(original, 0, 0);
 }
