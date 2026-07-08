@@ -1,7 +1,7 @@
 import io
 import numpy as np
 import cv2
-from PIL import Image
+from PIL import Image, ImageOps
 
 TARGET_SIZE = 512  # итоговый холст для спрайта Стены (квадрат, прозрачный фон)
 
@@ -43,10 +43,17 @@ def _process_photo(raw_bytes: bytes) -> dict:
       3. Заливаем выбранный контур целиком (внутренности рыбки сохраняются),
          обрезаем и вписываем в 512×512 с прозрачным фоном.
     """
-    file_bytes = np.frombuffer(raw_bytes, np.uint8)
-    img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    if img_bgr is None:
-        raise ValueError("cannot decode image")
+    # Телефонные фото часто несут EXIF-тег ориентации (поворот на 90/180/270 —
+    # это метаданные, а не поворот самих пикселей). cv2.imdecode эти метаданные
+    # полностью игнорирует, так что без явной коррекции здесь фото может быть
+    # буквально повёрнуто боком ещё до начала поиска листа. Правим через PIL
+    # (умеет читать EXIF), затем конвертируем в OpenCV BGR для остального
+    # пайплайна.
+    try:
+        pil_img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw_bytes)))
+    except Exception as e:
+        raise ValueError(f"cannot decode image: {e}")
+    img_bgr = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
 
     paper = _extract_paper(img_bgr)  # BGR, только сам лист (без стола)
 
