@@ -12,90 +12,14 @@ const state = {
   shotDataUrl: null // captured photo as data URL
 };
 
-// ---------- Живой фон-аквариум (декор) ----------
-// Лёгкий canvas-аквариум на фоне экрана Сканера — та же эстетика (градиент
-// воды, пузырьки, силуэты рыб), что и aquarium.html, но специально НЕ
-// боид-симуляция оттуда: это фон под UI, где ребёнок тыкает кнопки и водит
-// пальцем по canvas-раскраске, лишняя нагрузка на слабых телефонах ни к чему.
-// ~15 fps через setInterval (не requestAnimationFrame) и пауза при уходе со
-// вкладки — сознательная экономия батареи, не привет "неоптимизированный код".
-function buildOceanBackground() {
-  const canvas = document.getElementById('bgAquarium');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  let W, H;
-  function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  const bubbles = Array.from({ length: 16 }, () => ({
-    x: Math.random() * W, y: Math.random() * H,
-    r: 1.5 + Math.random() * 4, vy: 0.25 + Math.random() * 0.5,
-    sway: Math.random() * Math.PI * 2, swaySpd: 0.01 + Math.random() * 0.02,
-  }));
-
-  const bgFish = Array.from({ length: 3 }, (_, i) => ({
-    x: Math.random() * W, baseY: H * (0.25 + i * 0.2 + Math.random() * 0.1),
-    vx: (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.2),
-    phase: Math.random() * Math.PI * 2, size: 34 + Math.random() * 18,
-  }));
-
-  function draw() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#04283e'); g.addColorStop(0.45, '#0b4f6c');
-    g.addColorStop(0.8, '#157a9e'); g.addColorStop(1, '#1c95b8');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-
-    for (const b of bubbles) {
-      b.y -= b.vy; b.sway += b.swaySpd; b.x += Math.sin(b.sway) * 0.3;
-      if (b.y < -10) { b.y = H + 10; b.x = Math.random() * W; }
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(180,230,255,0.35)';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-    }
-
-    for (const f of bgFish) {
-      f.x += f.vx;
-      if (f.x < -f.size) f.x = W + f.size;
-      if (f.x > W + f.size) f.x = -f.size;
-      const y = f.baseY + Math.sin(Date.now() / 900 + f.phase) * 10;
-      ctx.save();
-      ctx.translate(f.x, y);
-      if (f.vx > 0) ctx.scale(-1, 1);
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = '#ffd166';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, f.size * 0.5, f.size * 0.3, 0, 0, Math.PI * 2);
-      ctx.moveTo(f.size * 0.4, 0);
-      ctx.lineTo(f.size * 0.75, -f.size * 0.22);
-      ctx.lineTo(f.size * 0.75, f.size * 0.22);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  let bgInterval = null;
-  function start() {
-    if (bgInterval) return;
-    bgInterval = setInterval(draw, 66); // ~15fps — экономия батареи, фон не обязан быть плавным
-  }
-  function stop() {
-    if (bgInterval) { clearInterval(bgInterval); bgInterval = null; }
-  }
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stop(); else start();
-  });
-  draw();
-  start();
-}
-buildOceanBackground();
+// ---------- Живой фон-аквариум ----------
+// Фон экрана Сканера — сам aquarium.html во встроенном iframe (см. index.html,
+// #bg-aquarium, src="/aquarium.html?bg=1"), а не отдельная имитация: те же
+// рыбки, что и на настоящей Стене, тот же боид-рендер, то же WS-подключение
+// к /ws/wall (бэкенд поддерживает сколько угодно одновременных
+// wall_connections — второе соединение из iframe не мешает основной Стене
+// на другом устройстве). Никакого отдельного JS с этой стороны не нужно —
+// ?bg=1 внутри aquarium.html сам скрывает там HUD/exitBtn/feedhint/banner.
 
 const screens = {
   home: document.getElementById('screen-home'),

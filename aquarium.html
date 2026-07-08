@@ -79,6 +79,15 @@
     from { transform: translateY(-32px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
+
+  /* ?bg=1 — встраивается как фон Сканера через iframe (см. index.html).
+     Сама анимация рыб/WS-подключение/приём новых рыбок работают как обычно —
+     скрыт только UI поверх canvas, он тут не нужен и перекрывался бы карточками
+     Сканера. body.bg-mode ставится в JS ниже до отрисовки первого кадра. */
+  body.bg-mode #hud, body.bg-mode #exitBtn,
+  body.bg-mode #feedhint, body.bg-mode #banner {
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -95,6 +104,14 @@
 <div id="feedhint">🍎 клик — покормить рыбок</div>
 
 <script>
+// ?bg=1 — эта страница встроена как фоновый iframe на экране Сканера
+// (см. index.html, #bg-aquarium). HUD/exitBtn/feedhint/banner там не нужны
+// (см. CSS body.bg-mode выше) — сама Стена, WS-подключение, боиды и приём
+// новых рыбок продолжают работать полностью как обычно.
+if (new URLSearchParams(location.search).has('bg')) {
+  document.body.classList.add('bg-mode');
+}
+
 // ═══════════════════════════════════════════════════════
 //  ПЕРЕХОД НА/С СКАНЕРА (см. app.js: goToAquarium/playEnterAnimation —
 //  тот же приём, зеркально: тут HUD/exitBtn/feedhint, а не header/.screen).
