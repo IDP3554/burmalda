@@ -83,6 +83,16 @@ function getServerUrl() {
   }
 })();
 
+// Встроенный экран-аквариум (#screen-aquarium) — dev/test-инструмент, не
+// production-Стена (см. API_CONTRACT.md, раздел «Компоненты»). Обычные
+// кнопки «Смотреть аквариум» теперь ведут на настоящую Стену — aquarium.html.
+// Этот скрытый вход оставлен для локальной отладки Сканера без второго
+// устройства: ?dev-aquarium=1 в адресной строке.
+if (new URLSearchParams(location.search).has('dev-aquarium')) {
+  showScreen('aquarium');
+  initAquarium();
+}
+
 // ---------- Home: mode selection ----------
 document.querySelectorAll('.mode-card').forEach(card => {
   card.addEventListener('click', () => {
@@ -92,8 +102,9 @@ document.querySelectorAll('.mode-card').forEach(card => {
 });
 
 document.getElementById('toAquariumBtn').addEventListener('click', () => {
-  showScreen('aquarium');
-  initAquarium();
+  // aquarium.html — единственный production Wall-клиент (см. API_CONTRACT.md),
+  // встроенный экран-аквариум ниже — только dev-инструмент (?dev-aquarium=1).
+  window.location.href = aquaServerOrigin() + '/aquarium.html';
 });
 
 // ---------- Back links ----------
@@ -732,8 +743,7 @@ function showSendSuccess() {
     <button class="btn" id="watchBtn">Смотреть аквариум 🐠</button>
     <button class="btn secondary" id="againBtn">Ещё рыбку</button>`;
   document.getElementById('watchBtn').addEventListener('click', () => {
-    showScreen('aquarium');
-    initAquarium();
+    window.location.href = aquaServerOrigin() + '/aquarium.html';
   });
   document.getElementById('againBtn').addEventListener('click', resetFlow);
 }
