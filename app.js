@@ -576,6 +576,22 @@ document.getElementById('sendScanBtn').addEventListener('click', () => {
 // ===================================================================
 // Send to server
 // ===================================================================
+
+// Ошибки POST /api/fish, для которых имеет смысл не "Попробовать снова" (тот же
+// кадр), а "Переснять фото" (новый кадр с камеры) — проблема в содержимом/
+// качестве фото, а не в сети. Бэкенд (backend/main.py) шлёт error как
+// "processing_failed: <detail>" / "bad_image_data: <detail>" — сверяем по
+// префиксу, а не по точному совпадению, см. API_CONTRACT.md.
+const RETAKE_ERROR_MESSAGES = [
+  { prefix: 'processing_failed', text: 'Не видим рыбку на листе. Попробуй переснять при хорошем свете 💡' },
+  { prefix: 'bad_image_data', text: 'Не получилось прочитать фото. Попробуй переснять ещё раз 📷' }
+];
+
+function matchRetakeError(errorText) {
+  if (typeof errorText !== 'string') return null;
+  return RETAKE_ERROR_MESSAGES.find(e => errorText.startsWith(e.prefix)) || null;
+}
+
 function sendFish(imageDataUrl) {
   showScreen('status');
   const statusBox = document.getElementById('statusBox');
@@ -593,29 +609,59 @@ function sendFish(imageDataUrl) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-    .then(res => {
-      if (!res.ok) throw new Error('Сервер ответил: ' + res.status);
-      return res.json().catch(() => ({}));
-    })
-    .then(() => {
-      statusBox.innerHTML = `
-        <div class="big-emoji">🐠</div>
-        <div>Рыбка отправлена в аквариум!</div>
-        <button class="btn" id="watchBtn">Смотреть аквариум 🐠</button>
-        <button class="btn secondary" id="againBtn">Ещё рыбку</button>`;
-      document.getElementById('watchBtn').addEventListener('click', () => {
-        showScreen('aquarium');
-        initAquarium();
-      });
-      document.getElementById('againBtn').addEventListener('click', resetFlow);
-    })
-    .catch(err => {
-      statusBox.innerHTML = `
-        <div class="big-emoji">⚠️</div>
-        <div>Не получилось отправить: ${err.message}</div>
-        <button class="btn secondary" id="retryBtn">Попробовать снова</button>`;
-      document.getElementById('retryBtn').addEventListener('click', () => sendFish(imageDataUrl));
+    .then(res => res.json().catch(() => ({})).then(body => {
+      if (res.ok && body && body.ok !== false) {
+        showSendSuccess();
+      } else {
+        showSendError(body ? body.error : undefined, imageDataUrl);
+      }
+    }))
+    .catch(() => {
+      // Сеть недоступна / сервер вообще не ответил — тела ответа нет.
+      showSendError(undefined, imageDataUrl);
     });
+}
+
+function showSendSuccess() {
+  const statusBox = document.getElementById('statusBox');
+  statusBox.innerHTML = `
+    <div class="big-emoji">🐠</div>
+    <div>Рыбка отправлена в аквариум!</div>
+    <button class="btn" id="watchBtn">Смотреть аквариум 🐠</button>
+    <button class="btn secondary" id="againBtn">Ещё рыбку</button>`;
+  document.getElementById('watchBtn').addEventListener('click', () => {
+    showScreen('aquarium');
+    initAquarium();
+  });
+  document.getElementById('againBtn').addEventListener('click', resetFlow);
+}
+
+// errorText === undefined -> сетевая ошибка/5xx/нет ответа: повтор того же
+// запроса имеет смысл ("Попробовать снова"). errorText начинается с
+// processing_failed/bad_image_data -> проблема в самом кадре, повтор того же
+// запроса даст тот же результат: нужно переснять (тот же флоу, что retakeBtn).
+// Переснять фото имеет смысл только для mode=scan — в mode=draw камеры нет.
+function showSendError(errorText, imageDataUrl) {
+  const statusBox = document.getElementById('statusBox');
+  const retake = state.mode === 'scan' ? matchRetakeError(errorText) : null;
+
+  if (retake) {
+    statusBox.innerHTML = `
+      <div class="big-emoji">📷</div>
+      <div>${retake.text}</div>
+      <button class="btn secondary" id="retakePhotoBtn">Переснять фото</button>`;
+    document.getElementById('retakePhotoBtn').addEventListener('click', () => {
+      showScreen('scan');
+      initCamera();
+    });
+    return;
+  }
+
+  statusBox.innerHTML = `
+    <div class="big-emoji">⚠️</div>
+    <div>Не получилось отправить. Проверь интернет и попробуй ещё раз.</div>
+    <button class="btn secondary" id="retryBtn">Попробовать снова</button>`;
+  document.getElementById('retryBtn').addEventListener('click', () => sendFish(imageDataUrl));
 }
 
 function resetFlow() {
