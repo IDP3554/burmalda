@@ -3,7 +3,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +27,6 @@ app.add_middleware(
 
 # In-memory состояние — этого достаточно для хакатона (демо в одной сессии)
 fish_queue: List[dict] = []          # история рыб (для поллинга/реконнекта)
-fish_db: Dict[str, dict] = {}        # fish_id -> метаданные
 
 # Активные подключения "Стены"/сайта, куда рыбки транслируются (может быть несколько)
 wall_connections: List[WebSocket] = []
@@ -80,7 +79,6 @@ async def receive_fish(payload: FishPayload):
         "height": result["height"],
         "image_url": f"/api/fish/{fish_id}/image",
     }
-    fish_db[fish_id] = meta
     fish_queue.append(meta)
 
     await broadcast_to_walls({"type": "new_fish", **meta})
