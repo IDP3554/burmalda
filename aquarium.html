@@ -26,9 +26,11 @@
 </div>
 
 <script>
-const SERVER = location.hostname + ':3000';        // бэкенд
-const WS_URL = 'ws://' + SERVER + '/ws/wall';
-const HTTP   = 'http://' + SERVER;
+// Берём тот же адрес, с которого открыт аквариум (бэкенд сам отдаёт эту страницу).
+// Работает и локально, и по локальной сети, и на хостинге — без правки кода.
+const WS_PROTO = location.protocol === 'https:' ? 'wss://' : 'ws://';
+const WS_URL = WS_PROTO + location.host + '/ws/wall';
+const HTTP   = location.origin;
 
 const canvas = document.getElementById('tank');
 const ctx = canvas.getContext('2d');

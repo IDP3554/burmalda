@@ -16,6 +16,9 @@ APP_DIR = Path(__file__).parent
 STORAGE_DIR = APP_DIR / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
 
+# Статика (Сканер + Аквариум) лежит в корне репозитория, на уровень выше backend/.
+SITE_DIR = APP_DIR.parent
+
 app = FastAPI(title="Animagia Backend")
 
 app.add_middleware(
@@ -42,6 +45,23 @@ class FishPayload(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "time": time.time(), "queue_len": len(fish_queue)}
+
+
+# --- Отдача статики: чтобы Сканер и Аквариум открывались с того же адреса, что и
+# API (нужно для деплоя на Railway/хостинг, где всё живёт на одном порту). ---
+@app.get("/")
+async def site_index():
+    return FileResponse(SITE_DIR / "index.html")
+
+
+@app.get("/app.js")
+async def site_appjs():
+    return FileResponse(SITE_DIR / "app.js", media_type="application/javascript")
+
+
+@app.get("/aquarium.html")
+async def site_aquarium():
+    return FileResponse(SITE_DIR / "aquarium.html")
 
 
 @app.post("/api/fish")

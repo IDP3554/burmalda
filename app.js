@@ -71,6 +71,17 @@ function getServerUrl() {
   return document.getElementById('serverUrl').value.trim();
 }
 
+// Если адрес не меняли вручную, подставляем тот же origin, с которого открыт
+// Сканер (бэкенд сам отдаёт эту страницу). Так работает и локально, и по
+// локальной сети (http://<ip>:3000), и на хостинге — без правки кода.
+(function () {
+  const su = document.getElementById('serverUrl');
+  if (su && location.protocol.startsWith('http') &&
+      (!su.value || /localhost:3000|192\.168\.|127\.0\.0\.1/.test(su.value))) {
+    su.value = location.origin + '/api/fish';
+  }
+})();
+
 // ---------- Home: mode selection ----------
 document.querySelectorAll('.mode-card').forEach(card => {
   card.addEventListener('click', () => {
