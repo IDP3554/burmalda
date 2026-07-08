@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Анимагия — Аквариум</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #020e1a; }
+  canvas { display: block; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 14px; left: 14px;
+    color: rgba(200,240,255,0.85); font-size: 13px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: rgba(0,10,30,0.5); backdrop-filter: blur(8px);
+    padding: 10px 16px; border-radius: 12px;
+    border: 1px solid rgba(100,200,255,0.2);
+    line-height: 1.7; pointer-events: none;
+  }
+  #hud b { color: #ffd166; }
+  #dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: #555; margin-right: 6px;
+    vertical-align: middle; transition: background 0.4s;
+  }
+  #dot.on  { background: #06d6a0; box-shadow: 0 0 8px #06d6a0; }
+  #dot.off { background: #e63946; }
+
+  /* Новая рыба — баннер */
+  #banner {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(6,214,160,0.15); backdrop-filter: blur(10px);
+    border: 1px solid rgba(6,214,160,0.4);
+    color: #06d6a0; font-size: 16px; font-weight: 600;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 12px 28px; border-radius: 30px;
+    opacity: 0; transition: opacity 0.4s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #banner.show { opacity: 1; }
+
+  /* Подсказка кормления */
+  #feedhint {
+    position: fixed; bottom: 14px; right: 16px;
+    color: rgba(200,240,255,0.4); font-size: 12px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  🐠 <b>Анимагия</b> — аквариум<br>
+  <span id="dot"></span><span id="status">подключаюсь…</span><br>
+  рыбок: <b id="count">0</b>
+</div>
+
+<div id="banner"></div>
+<div id="feedhint">🍎 клик — покормить рыбок</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  КОНФИГ
+// ═══════════════════════════════════════════════════════
+const CFG = {
+  maxFish:        30,
+  boidRadius:     120,   // радиус видимости соседей
+  separateDist:   55,    // дистанция личного пространства
+  cohesion:       0.0005,
+  separation:     0.18,
+  alignment:      0.005,
+  boundary:       0.025,  // ↓ плавный разворот у стенок
+  wander:         0.10,
+  wanderChange:   0.008,  // ↓ медленный дрейф курса (было 0.03)
+  minSpeed:       1.0,
+  maxSpeed:       2.6,
+  fishSize:       90,
+  bubbleCount:    50,
+  feedRadius:     999999, // ← все рыбки на экране идут к корму
+  feedDuration:   5000,
+  pollMs:         2500,
+};
+
+// ═══════════════════════════════════════════════════════
+//  CANVAS
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════
+//  ПУЗЫРЬКИ
+// ═══════════════════════════════════════════════════════
+const bubbles = Array.from({length: CFG.bubbleCount}, () => makeBubble());
+
+function makeBubble(yOverride) {
+  return {
+    x:    Math.random() * W,
+    y:    yOverride !== undefined ? yOverride : H + Math.random() * H,
+    r:    1.5 + Math.random() * 4,
+    vy:   0.35 + Math.random() * 0.9,
+    sway: Math.random() * Math.PI * 2,
+    swayAmp: 10 + Math.random() * 20,
+    swaySpd: 0.01 + Math.random() * 0.02,
+  };
+}
+
+function updateBubbles() {
+  for (const b of bubbles) {
+    b.y  -= b.vy;
+    b.sway += b.swaySpd;
+    b.x  += Math.sin(b.sway) * 0.4;
+    if (b.y < -10) {
+      Object.assign(b, makeBubble(H + 20));
+      b.x = Math.random() * W;
+    }
+  }
+}
+
+function drawBubbles() {
+  for (const b of bubbles) {
+    const alpha = Math.min(1, (H - b.y) / 80) * 0.4;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(180,230,255,${alpha})`;
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // блик
+    ctx.beginPath();
+    ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.7})`;
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  КАУСТИКА (анимированные световые узоры)
+// ═══════════════════════════════════════════════════════
+let causticT = 0;
+
+function drawCaustics() {
+  causticT += 0.003;
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  for (let i = 0; i < 8; i++) {
+    const x = W * (0.1 + 0.1 * i) + Math.sin(causticT + i * 1.3) * 60;
+    const y = -50 + Math.cos(causticT * 0.7 + i * 0.9) * 40;
+    const grad = ctx.createLinearGradient(x, y, x + 30, H * 0.7);
+    grad.addColorStop(0, 'rgba(100,220,255,0.9)');
+    grad.addColorStop(1, 'rgba(100,220,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 15 + Math.sin(causticT + i) * 8, H * 0.7);
+    ctx.lineTo(x + 30 + Math.cos(causticT + i * 0.5) * 8, H * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+//  ДНО АКВАРИУМА
+// ═══════════════════════════════════════════════════════
+function drawFloor() {
+  const floorY = H * 0.88;
+
+  // Песок
+  const sandGrad = ctx.createLinearGradient(0, floorY, 0, H);
+  sandGrad.addColorStop(0, '#1a3a2a');
+  sandGrad.addColorStop(1, '#0d1f15');
+  ctx.fillStyle = sandGrad;
+  ctx.fillRect(0, floorY, W, H - floorY);
+
+  // Камушки
+  ctx.save();
+  const seed = 42;
+  for (let i = 0; i < 40; i++) {
+    const px = ((seed * 7 + i * 137) % W);
+    const py = floorY + 4 + (i * 31) % 18;
+    const rx = 4 + (i * 17) % 12;
+    const ry = 3 + (i * 11) % 7;
+    ctx.beginPath();
+    ctx.ellipse(px, py, rx, ry, (i * 0.4), 0, Math.PI * 2);
+    const l = 20 + (i * 13) % 20;
+    ctx.fillStyle = `hsl(${160 + (i*23)%60},${20+(i*7)%30}%,${l}%)`;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Водоросли
+  drawSeaweed(W * 0.05, floorY, 60, '#1a6644', 0);
+  drawSeaweed(W * 0.18, floorY, 80, '#0d5c3a', 1.2);
+  drawSeaweed(W * 0.82, floorY, 70, '#1a6644', 0.7);
+  drawSeaweed(W * 0.92, floorY, 90, '#0a4a30', 2.1);
+  drawSeaweed(W * 0.5,  floorY, 55, '#156b42', 3.5);
+
+  // Кораллы
+  drawCoral(W * 0.12, floorY, '#e63946');
+  drawCoral(W * 0.75, floorY, '#f4a261');
+  drawCoral(W * 0.38, floorY, '#ffd166');
+}
+
+let weedT = 0;
+function drawSeaweed(x, baseY, h, color, phase) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  const sway = Math.sin(weedT + phase) * 12;
+  ctx.moveTo(x, baseY);
+  ctx.bezierCurveTo(
+    x + sway * 0.3, baseY - h * 0.33,
+    x - sway * 0.5, baseY - h * 0.66,
+    x + sway,       baseY - h
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCoral(x, y, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  const branches = [[0,-30],[10,-22],[-10,-22],[5,-45],[-5,-45]];
+  for (const [dx,dy] of branches) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + dx, y + dy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + dx, y + dy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+//  РЫБКИ — heading-based движение
+//  Каждая рыбка имеет heading (угол курса) и speed.
+//  vx/vy всегда выводятся из heading — рыбка НИКОГДА
+//  не плывёт задом: она поворачивается и плывёт вперёд.
+// ═══════════════════════════════════════════════════════
+const fishes = [];
+const seen = new Set();
+
+// Интерполяция углов по кратчайшему пути (-π..π)
+function lerpAngle(a, b, t) {
+  let diff = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  return a + diff * t;
+}
+
+class Fish {
+  constructor(img, name, id) {
+    this.img  = img;
+    this.name = name;
+    this.id   = id;
+    this.ready = false;
+    this.size  = CFG.fishSize * (0.75 + Math.random() * 0.6);
+    this.x     = Math.random() * W;
+    this.y     = H * 0.15 + Math.random() * (H * 0.65);
+
+    // Курс (угол) и скорость — вместо vx/vy напрямую
+    this.heading = Math.random() * Math.PI * 2;
+    this.speed   = CFG.minSpeed + Math.random() * (CFG.maxSpeed - CFG.minSpeed);
+    // vx/vy нужны для Boids-расчётов соседей
+    this.vx = Math.cos(this.heading) * this.speed;
+    this.vy = Math.sin(this.heading) * this.speed;
+
+    this.phase      = Math.random() * Math.PI * 2;
+    this.nameAlpha  = 0;
+    this.spawnScale = 0;
+    this.attracted    = false;
+    this.attractTarget = null;
+    this.eating        = false;  // ест сейчас
+    this.eatTimer      = 0;     // мс до окончания еды
+
+    // Индивидуальные параметры блуждания (меньше = плавнее)
+    this.wanderSpeed = 0.4 + Math.random() * 0.6;  // 0.4–1.0
+    this.wanderBias  = (Math.random() - 0.5) * 0.004; // лёгкое личное предпочтение
+
+    img.onload = () => { this.ready = true; };
+    if (img.complete) this.ready = true;
+  }
+
+  update(dt) {
+    if (this.spawnScale < 1)
+      this.spawnScale = Math.min(1, this.spawnScale + dt * 0.002);
+
+    if (this.eating) {
+      // Рыбка ест — тормозит у еды
+      this.eatTimer -= dt;
+      this.speed = Math.max(0, this.speed * 0.90); // тормозит
+      if (this.eatTimer <= 0) {
+        this.eating       = false;
+        this.attracted    = false;
+        this.attractTarget = null;
+        this.speed        = CFG.minSpeed;
+      }
+    } else if (this.attracted && this.attractTarget) {
+      // Плывём к еде
+      const dx   = this.attractTarget.x - this.x;
+      const dy   = this.attractTarget.y - this.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > 5) {
+        const targetAngle = Math.atan2(dy, dx);
+        this.heading = lerpAngle(this.heading, targetAngle, 0.25);
+        this.speed   = Math.min(this.speed + 0.12, CFG.maxSpeed * 1.4);
+      }
+    } else {
+      this.applyBoids();
+    }
+
+    if (!this.eating) {
+      this.speed = Math.max(CFG.minSpeed, Math.min(CFG.maxSpeed, this.speed));
+    }
+
+    this.vx = Math.cos(this.heading) * this.speed;
+    this.vy = Math.sin(this.heading) * this.speed;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.phase += this.eating ? 0.12 : 0.05; // быстрее покачивается пока ест
+
+    const floorY = H * 0.88;
+    if (this.y > floorY - this.size * 0.3)
+      this.heading = lerpAngle(this.heading, -Math.PI / 2, 0.05);
+    if (this.y < this.size * 0.3)
+      this.heading = lerpAngle(this.heading,  Math.PI / 2, 0.05);
+
+    if (this.x < -this.size) this.x = W + this.size;
+    if (this.x > W + this.size) this.x = -this.size;
+  }
+
+  applyBoids() {
+    let sx=0, sy=0, separateCount=0;
+    let neighborCount=0, avgVx=0, avgVy=0;
+
+    for (const other of fishes) {
+      if (other === this) continue;
+      const dx = other.x - this.x;
+      const dy = other.y - this.y;
+      const d  = Math.sqrt(dx*dx + dy*dy);
+
+      if (d < CFG.boidRadius) {
+        avgVx += other.vx; avgVy += other.vy;
+        neighborCount++;
+        if (d < CFG.separateDist && d > 0) {
+          sx -= dx/d; sy -= dy/d;
+          separateCount++;
+        }
+      }
+    }
+
+    // Слабое выравнивание курса с соседями
+    if (neighborCount > 0) {
+      const targetAngle = Math.atan2(avgVy / neighborCount, avgVx / neighborCount);
+      this.heading = lerpAngle(this.heading, targetAngle, CFG.alignment);
+    }
+
+    // Разделение — повернуться прочь от толпы
+    if (separateCount > 0) {
+      const awayAngle = Math.atan2(sy, sx);
+      this.heading = lerpAngle(this.heading, awayAngle, 0.04); // плавнее
+      this.speed = Math.min(this.speed + 0.03, CFG.maxSpeed);
+    }
+
+    // Индивидуальное блуждание — heading дрейфует медленно
+    this.heading += (Math.random() - 0.5) * CFG.wanderChange * this.wanderSpeed
+                  + this.wanderBias;
+
+    // Мягкое отталкивание от границ (плавный поворот)
+    const margin = 100;
+    if (this.x < margin)
+      this.heading = lerpAngle(this.heading, 0, CFG.boundary * (1 - this.x / margin));
+    if (this.x > W - margin)
+      this.heading = lerpAngle(this.heading, Math.PI, CFG.boundary * (1 - (W - this.x) / margin));
+  }
+
+  // Позиция рта: передний край рыбки, чуть ниже центра.
+  // Работает и для нарисованного спрайта, и для реальных фото.
+  get mouthX() {
+    const sign = Math.cos(this.heading) >= 0 ? 1 : -1;
+    return this.x + sign * this.size * 0.36;
+  }
+  get mouthY() {
+    return this.y + this.size * 0.06; // лёгкое смещение вниз, нейтральное
+  }
+
+  draw() {
+    if (!this.ready) return;
+
+    // Морда всегда смотрит в направлении heading
+    const facingLeft = Math.cos(this.heading) < 0;
+    const wobble = Math.sin(this.phase) * (this.eating ? 0.18 : 0.08);
+    const s = this.spawnScale;
+
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(wobble);
+    ctx.scale(s * (facingLeft ? -1 : 1), s);
+
+    // Тень под рыбой
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.filter = 'blur(4px)';
+    ctx.drawImage(this.img, -this.size/2, -this.size/4, this.size, this.size * 0.6);
+    ctx.restore();
+
+    // Сама рыба
+    ctx.drawImage(this.img, -this.size/2, -this.size/2, this.size, this.size);
+
+    ctx.restore();
+
+    // Имя рыбки (над ней, без переворота)
+    if (this.name && s > 0.8) {
+      this.nameAlpha = Math.min(1, this.nameAlpha + 0.05);
+      ctx.save();
+      ctx.globalAlpha = this.nameAlpha * 0.8;
+      ctx.font = '11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd166';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(this.name, this.x, this.y - this.size * 0.55);
+      ctx.restore();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  КОРМЛЕНИЕ
+// ═══════════════════════════════════════════════════════
+const foods = [];
+let lastFoodTime = 0;
+
+class Food {
+  constructor(x, y) {
+    this.x     = x;
+    this.y     = y;
+    this.vy    = 0.25;       // очень медленное падение
+    this.life  = 12000;
+    this.alpha = 1;
+    this.phase = Math.random() * Math.PI * 2;
+    this.eating = false;
+
+    // Одна рыбка на один кусок еды
+    this.assignedFish = this._pickFish();
+    if (this.assignedFish) {
+      this.assignedFish.attracted    = true;
+      this.assignedFish.attractTarget = this;
+    }
+  }
+
+  _pickFish() {
+    let best = null, bestDist = Infinity;
+    for (const f of fishes) {
+      if (f.attracted || f.eating) continue;
+      const d = Math.hypot(this.x - f.x, this.y - f.y);
+      if (d < bestDist) { bestDist = d; best = f; }
+    }
+    return best;
+  }
+
+  update(dt) {
+    this.life  -= dt;
+    this.phase += 0.04;
+
+    // Медленно падает на песок — НО замирает когда рыбка ест
+    const sandY = H * 0.86;
+    if (!this.eating && this.y < sandY) {
+      this.y  += this.vy;
+      this.vy  = Math.min(this.vy + 0.004, 0.9);
+    } else if (!this.eating) {
+      this.y  = sandY;
+      this.vy = 0;
+    }
+    // если this.eating — Y не меняется, еда висит на месте
+
+    if (!this.assignedFish) return;
+
+    // Рыбка пропала?
+    if (!fishes.includes(this.assignedFish)) {
+      this.life = 0;
+      return;
+    }
+
+    if (!this.eating) {
+      // Рыбка доплыла ртом до еды?
+      const mouthDist = Math.hypot(this.x - this.assignedFish.mouthX,
+                                   this.y - this.assignedFish.mouthY);
+      if (mouthDist < 42) {
+        this.eating = true;
+        this.assignedFish.eating       = true;
+        this.assignedFish.eatTimer     = 2500;
+        this.assignedFish.attracted    = false;
+        this.assignedFish.attractTarget = null;
+      }
+    } else {
+      // Еда плавно летит к рту рыбки (lerp)
+      this.x += (this.assignedFish.mouthX - this.x) * 0.15;
+      this.y += (this.assignedFish.mouthY - this.y) * 0.15;
+      this.alpha = Math.max(0, this.alpha - dt / 2000);
+      if (this.alpha <= 0 || !this.assignedFish.eating) {
+        this.life = 0;
+      }
+    }
+  }
+
+  draw() {
+    if (this.alpha <= 0) return;
+    const pulse = 1 + 0.12 * Math.sin(this.phase);
+    const r = 6 * pulse;
+    ctx.globalAlpha = this.alpha * Math.min(1, this.life / 1500);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd166';
+    ctx.shadowColor = '#ff9f43';
+    ctx.shadowBlur = 16;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(this.x - 1.5, this.y - 1.5, r * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,210,0.9)';
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  get dead() { return this.life <= 0; }
+}
+
+canvas.addEventListener('click', (e) => {
+  const now = Date.now();
+  if (now - lastFoodTime < 1500) return; // кулдаун 1.5с
+  lastFoodTime = now;
+  const rect = canvas.getBoundingClientRect();
+  foods.push(new Food(e.clientX - rect.left, e.clientY - rect.top));
+});
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const now = Date.now();
+  if (now - lastFoodTime < 1500) return;
+  lastFoodTime = now;
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches[0];
+  foods.push(new Food(t.clientX - rect.left, t.clientY - rect.top));
+}, {passive: false});
+
+
+// ═══════════════════════════════════════════════════════
+//  ФОНОВЫЙ ГРАДИЕНТ
+// ═══════════════════════════════════════════════════════
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   '#03102a');
+  grad.addColorStop(0.4, '#062040');
+  grad.addColorStop(0.8, '#082a1a');
+  grad.addColorStop(1,   '#040e10');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ═══════════════════════════════════════════════════════
+//  СТЕКЛЯННЫЕ КРАЯ АКВАРИУМА
+// ═══════════════════════════════════════════════════════
+function drawGlass() {
+  // Верхняя поверхность воды
+  const waterGrad = ctx.createLinearGradient(0, 0, 0, 30);
+  waterGrad.addColorStop(0, 'rgba(100,200,255,0.25)');
+  waterGrad.addColorStop(1, 'rgba(100,200,255,0)');
+  ctx.fillStyle = waterGrad;
+  ctx.fillRect(0, 0, W, 30);
+
+  // Блики по бокам
+  const leftGrad = ctx.createLinearGradient(0, 0, 20, 0);
+  leftGrad.addColorStop(0, 'rgba(150,220,255,0.12)');
+  leftGrad.addColorStop(1, 'rgba(150,220,255,0)');
+  ctx.fillStyle = leftGrad;
+  ctx.fillRect(0, 0, 20, H);
+
+  const rightGrad = ctx.createLinearGradient(W, 0, W-20, 0);
+  rightGrad.addColorStop(0, 'rgba(150,220,255,0.08)');
+  rightGrad.addColorStop(1, 'rgba(150,220,255,0)');
+  ctx.fillStyle = rightGrad;
+  ctx.fillRect(W-20, 0, 20, H);
+}
+
+// ═══════════════════════════════════════════════════════
+//  NETWORK — WebSocket + HTTP fallback
+// ═══════════════════════════════════════════════════════
+const WS_URL  = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/wall';
+const HTTP    = location.origin;
+const dotEl   = document.getElementById('dot');
+const statusEl= document.getElementById('status');
+const countEl = document.getElementById('count');
+const banner  = document.getElementById('banner');
+let bannerTimer = null;
+
+function setStatus(online, text) {
+  dotEl.className = online ? 'on' : 'off';
+  statusEl.textContent = text;
+}
+
+function showBanner(text) {
+  banner.textContent = text;
+  banner.classList.add('show');
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove('show'), 3500);
+}
+
+function addFish(meta) {
+  if (seen.has(meta.fish_id)) return;
+  seen.add(meta.fish_id);
+
+  // Убрать старейшую если переполнение
+  if (fishes.length >= CFG.maxFish) fishes.shift();
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = HTTP + meta.image_url;
+
+  const name = meta.name || meta.fishType || 'рыбка';
+  const fish = new Fish(img, name, meta.fish_id);
+  fishes.push(fish);
+
+  countEl.textContent = fishes.length;
+  showBanner(`🐟 Новая рыбка: ${name}!`);
+}
+
+// WebSocket
+let ws = null;
+function connectWS() {
+  try {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => setStatus(true, 'подключено');
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.fish_id || data.image_url) addFish(data);
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      setStatus(false, 'переподключение…');
+      setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => {
+      setStatus(false, 'ошибка WS');
+      ws.close();
+    };
+  } catch {
+    setStatus(false, 'WS недоступен');
+    startHttpPoll();
+  }
+}
+
+// HTTP fallback polling
+let lastFishId = null;
+function startHttpPoll() {
+  setInterval(async () => {
+    try {
+      const r = await fetch(HTTP + '/api/fish/latest');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data && data.fish_id && data.fish_id !== lastFishId) {
+        lastFishId = data.fish_id;
+        addFish(data);
+        setStatus(true, 'HTTP polling');
+      }
+    } catch {
+      setStatus(false, 'нет связи');
+    }
+  }, CFG.pollMs);
+}
+
+connectWS();
+
+// ═══════════════════════════════════════════════════════
+//  ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ
+// ═══════════════════════════════════════════════════════
+let last = 0;
+weedT = 0;
+
+function loop(ts) {
+  const dt = ts - last;
+  last = ts;
+  weedT += 0.02;
+
+  // Фон
+  drawBackground();
+  drawCaustics();
+  drawGlass();
+  drawFloor();
+
+  // Пузырьки (под рыбами)
+  updateBubbles();
+  drawBubbles();
+
+  // Еда
+  for (let i = foods.length - 1; i >= 0; i--) {
+    foods[i].update(dt);
+    foods[i].draw();
+    if (foods[i].dead) {
+      // Сбросить притяжение и таймер
+      const food = foods[i];
+      if (food._waitTimer) clearTimeout(food._waitTimer);
+      for (const f of fishes) {
+        if (f.attractTarget === food) {
+          f.attracted = false;
+          f.attractTarget = null;
+        }
+      }
+      foods.splice(i, 1);
+    }
+  }
+
+  // Рыбы
+  for (const f of fishes) {
+    f.update(dt);
+    f.draw();
+  }
+
+  // Если рыб нет — показать подсказку
+  if (fishes.length === 0) {
+    ctx.save();
+    ctx.font = '18px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(150,220,255,0.35)';
+    ctx.fillText('Ожидаем рыбок от сканера…', W/2, H/2);
+    ctx.restore();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+
+// ═══════════════════════════════════════════════════════
+//  DEMO MODE — автоматические тестовые рыбки при загрузке
+//  Нажми D на клавиатуре чтобы добавить ещё одну
+// ═══════════════════════════════════════════════════════
+const DEMO_NAMES  = ['Немо', 'Дори', 'Пузырь', 'Краб', 'Жемчуг', 'Марлин', 'Гуппи', 'Зефир'];
+const DEMO_COLORS = [
+  [0,   '#ff6b6b', '#ff9f43'],   // красный
+  [180, '#54a0ff', '#5f27cd'],   // синий
+  [120, '#1dd1a1', '#10ac84'],   // зелёный
+  [45,  '#feca57', '#ff9f43'],   // жёлтый
+  [300, '#ff9ff3', '#f368e0'],   // розовый
+  [200, '#48dbfb', '#0abde3'],   // голубой
+];
+
+function makeDemoFish(nameOverride) {
+  const id  = 'demo_' + Date.now() + '_' + Math.random();
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = 200;
+  const tc  = tmp.getContext('2d');
+
+  const [hue, col1, col2] = DEMO_COLORS[Math.floor(Math.random() * DEMO_COLORS.length)];
+
+  // ── Рыбка нарисована ГОЛОВОЙ ВПРАВО (eye справа, хвост слева) ──
+  // Это соответствует convention: без flip = смотрит вправо
+
+  // Хвост — СЛЕВА
+  const tailGrad = tc.createLinearGradient(0, 60, 55, 140);
+  tailGrad.addColorStop(0, col2);
+  tailGrad.addColorStop(1, col1);
+  tc.fillStyle = tailGrad;
+  tc.beginPath();
+  tc.moveTo(52, 100);
+  tc.lineTo(2, 62);
+  tc.lineTo(2, 138);
+  tc.closePath();
+  tc.fill();
+
+  // Тело — по центру
+  const bodyGrad = tc.createRadialGradient(110, 95, 5, 110, 95, 70);
+  bodyGrad.addColorStop(0, col2);
+  bodyGrad.addColorStop(1, col1);
+  tc.fillStyle = bodyGrad;
+  tc.beginPath();
+  tc.ellipse(108, 100, 68, 42, 0, 0, Math.PI * 2);
+  tc.fill();
+
+  // Полоски на теле
+  tc.globalAlpha = 0.25;
+  tc.fillStyle = '#fff';
+  for (let s = 0; s < 3; s++) {
+    tc.beginPath();
+    tc.ellipse(80 + s*20, 100, 5, 35, 0, 0, Math.PI*2);
+    tc.fill();
+  }
+  tc.globalAlpha = 1;
+
+  // Плавники
+  tc.fillStyle = col2;
+  tc.globalAlpha = 0.7;
+  tc.beginPath();
+  tc.ellipse(108, 60, 18, 8, -0.5, 0, Math.PI*2);
+  tc.fill();
+  tc.beginPath();
+  tc.ellipse(108, 140, 18, 8, 0.5, 0, Math.PI*2);
+  tc.fill();
+  tc.globalAlpha = 1;
+
+  // Голова — СПРАВА (рот-нос)
+  tc.fillStyle = col1;
+  tc.beginPath();
+  tc.ellipse(162, 100, 28, 36, 0, 0, Math.PI*2);
+  tc.fill();
+
+  // Глаз — СПРАВА
+  tc.fillStyle = '#fff';
+  tc.beginPath();
+  tc.arc(158, 88, 12, 0, Math.PI*2);
+  tc.fill();
+  tc.fillStyle = '#1a1a2e';
+  tc.beginPath();
+  tc.arc(161, 88, 7, 0, Math.PI*2);
+  tc.fill();
+  // Блик в глазу
+  tc.fillStyle = '#fff';
+  tc.beginPath();
+  tc.arc(164, 85, 3, 0, Math.PI*2);
+  tc.fill();
+
+  const img = new Image();
+  img.src = tmp.toDataURL();
+  const name = nameOverride || DEMO_NAMES[Math.floor(Math.random() * DEMO_NAMES.length)];
+  const fish = new Fish(img, name, id);
+  fish.ready = true;
+  seen.add(id);
+  fishes.push(fish);
+  countEl.textContent = fishes.length;
+  return fish;
+}
+
+// Авто-спавн 5 тестовых рыбок с задержкой (красиво появляются одна за другой)
+const autoNames = ['Немо', 'Дори', 'Марлин', 'Пузырь', 'Жемчуг'];
+autoNames.forEach((name, i) => {
+  setTimeout(() => {
+    makeDemoFish(name);
+    if (i === 0) showBanner('🐠 Тестовые рыбки загружены!');
+  }, 600 + i * 700);
+});
+
+// Клавиша D — добавить ещё одну
+document.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() !== 'd') return;
+  makeDemoFish();
+  showBanner('🐟 Новая демо рыбка (клавиша D)');
+});
+</script>
+</body>
+</html>
