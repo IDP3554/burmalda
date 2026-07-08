@@ -643,6 +643,10 @@ function showSendSuccess() {
 // Переснять фото имеет смысл только для mode=scan — в mode=draw камеры нет.
 function showSendError(errorText, imageDataUrl) {
   const statusBox = document.getElementById('statusBox');
+  // Known limitation: mode=draw + bad_image_data не показывает кнопку
+  // "Переснять" (нет камеры в draw-режиме) и падает на общий retry ниже —
+  // с тем же битым data URL, что реально не поможет. Решение отложено, риск
+  // принят тимлидом 2026-07-08. См. API_CONTRACT.md, раздел Versioning.
   const retake = state.mode === 'scan' ? matchRetakeError(errorText) : null;
 
   if (retake) {
