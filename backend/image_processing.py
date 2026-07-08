@@ -3,14 +3,15 @@ import numpy as np
 import cv2
 from PIL import Image
 
-TARGET_SIZE = 512  # итоговый холст для Unity-спрайта (квадрат, прозрачный фон)
+TARGET_SIZE = 512  # итоговый холст для спрайта Стены (квадрат, прозрачный фон)
 
 
 def process_fish_image(raw_bytes: bytes, mode: str = "photo") -> dict:
     """
     Возвращает dict:
       png_bytes -- PNG (RGBA) с рыбкой на прозрачном фоне
-      avg_color -- средний цвет рыбки [r,g,b] (для доп. эффектов в Unity)
+      avg_color -- средний цвет рыбки [r,g,b] (для доп. эффектов в клиенте
+                   Стены, например частиц/подсветки в Three.js)
       width, height -- итоговые размеры (всегда TARGET_SIZE x TARGET_SIZE)
     """
     if mode == "canvas":
