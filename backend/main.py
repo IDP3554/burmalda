@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -15,6 +16,12 @@ from image_processing import process_fish_image
 APP_DIR = Path(__file__).parent
 STORAGE_DIR = APP_DIR / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
+
+# fish_id всегда str(uuid.uuid4())[:8] — 8 hex-символов. Валидация в
+# get_fish_image ниже нужна потому, что fish_id там приходит из URL
+# (потенциально от клиента), а не только из уже сгенерированных id;
+# без неё "../../../etc/passwd" и т.п. подставлялись бы прямо в путь к файлу.
+FISH_ID_RE = re.compile(r"^[0-9a-f]{8}$")
 
 # Статика (Сканер + Аквариум) лежит в корне репозитория, на уровень выше backend/.
 SITE_DIR = APP_DIR.parent
@@ -125,6 +132,8 @@ def _decode_data_url(data_url: str) -> bytes:
 
 @app.get("/api/fish/{fish_id}/image")
 async def get_fish_image(fish_id: str):
+    if not FISH_ID_RE.match(fish_id):
+        return JSONResponse(status_code=404, content={"error": "not_found"})
     path = STORAGE_DIR / f"{fish_id}.png"
     if not path.exists():
         return JSONResponse(status_code=404, content={"error": "not_found"})
@@ -159,7 +168,16 @@ async def ws_wall(websocket: WebSocket):
             # держим соединение живым; можно принимать пинги/ack от клиента
             await websocket.receive_text()
     except WebSocketDisconnect:
-        wall_connections.remove(websocket)
+        pass
+    except Exception:
+        # Обрыв во время send_text (например, в цикле рассылки истории выше)
+        # не всегда всплывает как WebSocketDisconnect — без этой ветки и
+        # finally ниже "мёртвый" сокет застревал бы в wall_connections до
+        # следующей рассылки (там есть своя очистка, но не сразу).
+        pass
+    finally:
+        if websocket in wall_connections:
+            wall_connections.remove(websocket)
 
 
 async def broadcast_to_walls(message: dict):
