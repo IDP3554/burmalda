@@ -115,10 +115,6 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .big-emoji { font-size: 64px; }
   .hint { font-size: 13px; opacity: .7; margin-top: 8px; text-align: center; }
-  #serverUrlBox { margin-top: 10px; }
-  #serverUrlBox input {
-    width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 13px;
-  }
   .back-link { display: inline-block; margin-bottom: 10px; opacity: .8; font-size: 14px; cursor: pointer; }
 
   /* ---- Aquarium (встроенный аквариум на этом же сайте) ---- */
@@ -160,11 +156,6 @@
   </div>
 
   <button class="btn ghost" id="toAquariumBtn">🐠 Аквариум — смотреть рыбок</button>
-
-  <div id="serverUrlBox">
-    <div class="hint">Адрес сервера</div>
-    <input type="text" id="serverUrl" placeholder="http://192.168.1.10:3000/api/fish" value="http://localhost:3000/api/fish">
-  </div>
 </div>
 
 <!-- SCREEN 1: pick fish type -->

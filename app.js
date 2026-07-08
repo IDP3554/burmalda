@@ -1,6 +1,9 @@
 // ===== Устройство «Сканер» — Анимагия =====
 // Два режима: (1) раскраска на экране, (2) фото раскрашенного рисунка с бумаги.
-// По готовности — POST на сервер (Устройство «Стена» / бэкенд), см. serverUrl.
+// По готовности — POST на сервер (Устройство «Стена» / бэкенд), см. getServerUrl.
+// Адрес сервера всегда равен origin текущей страницы — Сканер обслуживается
+// тем же бэкендом, что и /api/fish, /ws/wall, /aquarium.html, вводить его
+// вручную не нужно (и негде — поля для этого в UI больше нет).
 
 const state = {
   mode: null,       // 'draw' | 'scan'
@@ -136,20 +139,15 @@ window.addEventListener('pageshow', (e) => {
   if (e.persisted) playEnterAnimation();
 });
 
+// Сканер и Стена всегда открываются с того же origin, что и сам бэкенд
+// (бэкенд же отдаёт /, /app.js, /aquarium.html и обслуживает /api/fish,
+// /ws/wall) — адрес сервера технически всегда равен текущему origin
+// страницы и не может быть каким-то другим. Раньше это было полем для
+// ручного ввода (serverUrl) — убрано, ручного ввода адреса в UI больше
+// нет нигде.
 function getServerUrl() {
-  return document.getElementById('serverUrl').value.trim();
+  return location.origin + '/api/fish';
 }
-
-// Если адрес не меняли вручную, подставляем тот же origin, с которого открыт
-// Сканер (бэкенд сам отдаёт эту страницу). Так работает и локально, и по
-// локальной сети (http://<ip>:3000), и на хостинге — без правки кода.
-(function () {
-  const su = document.getElementById('serverUrl');
-  if (su && location.protocol.startsWith('http') &&
-      (!su.value || /localhost:3000|192\.168\.|127\.0\.0\.1/.test(su.value))) {
-    su.value = location.origin + '/api/fish';
-  }
-})();
 
 // Встроенный экран-аквариум (#screen-aquarium) — dev/test-инструмент, не
 // production-Стена (см. API_CONTRACT.md, раздел «Компоненты»). Обычные
@@ -859,12 +857,16 @@ function resetFlow() {
 
 // ===================================================================
 // Built-in aquarium (тот же сайт — ребёнку не нужно открывать вторую страницу).
-// Подключается к тому же серверу, что и отправка рыбок (адрес из serverUrl).
+// Подключается к тому же серверу, что и отправка рыбок — это всегда текущий
+// origin страницы (см. getServerUrl выше).
 // ===================================================================
 const aqua = { started: false, fishes: [], seen: new Set(), bubbles: [] };
 
+// Тонкая обёртка вместо простого location.origin в вызовах ниже — так на
+// местах использования читается "происхождение сервера Стены", а не голый
+// location.origin без контекста.
 function aquaServerOrigin() {
-  try { return new URL(getServerUrl()).origin; } catch { return location.origin; }
+  return location.origin;
 }
 
 function initAquarium() {
