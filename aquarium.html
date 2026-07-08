@@ -358,14 +358,23 @@ function drawSpongeHouse(x, baseY) {
   ctx.save();
   ctx.translate(x, baseY - r * 0.68);
 
-  const bumps = 10;
-  const path = new Path2D();
-  for (let i = 0; i <= bumps; i++) {
+  // Точки соединяем плавными кривыми (через середины отрезков), а не прямыми
+  // линиями — иначе получается гранёный многоугольник вместо мягкого бугра.
+  const bumps = 12;
+  const ring = [];
+  for (let i = 0; i < bumps; i++) {
     const ang = (Math.PI * 2 * i) / bumps;
-    const wobble = 1 + 0.14 * Math.sin(ang * 3 + 1.4) + 0.08 * Math.cos(ang * 5);
-    const px = Math.cos(ang) * r * wobble;
-    const py = Math.sin(ang) * r * 0.82 * wobble;
-    if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
+    const wobble = 1 + 0.16 * Math.sin(ang * 3 + 1.4) + 0.09 * Math.cos(ang * 5);
+    ring.push([Math.cos(ang) * r * wobble, Math.sin(ang) * r * 0.82 * wobble]);
+  }
+  const path = new Path2D();
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(ring[bumps - 1], ring[0]);
+  path.moveTo(start[0], start[1]);
+  for (let i = 0; i < bumps; i++) {
+    const next = ring[(i + 1) % bumps];
+    const m = mid(ring[i], next);
+    path.quadraticCurveTo(ring[i][0], ring[i][1], m[0], m[1]);
   }
   path.closePath();
 
