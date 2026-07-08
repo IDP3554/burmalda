@@ -163,39 +163,77 @@ const FISH_SHAPES = {
     return path;
   },
 
-  // Рыба-клоун — округлое тело, спинной и брюшной плавники, раздвоенный хвост.
+  // Рыба-клоун — яйцевидное тело (заострено к носу), глаз у носа, спинной
+  // горб-плавник, хвост из двух лопастей, брюшной плавник, полосы на теле.
   clownfish: (w, h) => {
     const path = new Path2D();
-    path.ellipse(w * 0.46, h * 0.45, w * 0.30, h * 0.22, 0, 0, Math.PI * 2);
-    addFin(path, w * 0.73, h * 0.45, [[w * 0.94, h * 0.28], [w * 0.85, h * 0.45], [w * 0.94, h * 0.62]]);
-    addFin(path, w * 0.42, h * 0.25, [[w * 0.50, h * 0.07], [w * 0.58, h * 0.27]]);
-    addFin(path, w * 0.40, h * 0.65, [[w * 0.46, h * 0.83], [w * 0.54, h * 0.63]]);
+    const cx = 0.46, cy = 0.5, rx = 0.30, ry = 0.20;
+    path.moveTo(w * (cx - rx), h * cy);
+    path.bezierCurveTo(w * (cx - rx), h * (cy - ry * 1.05), w * (cx - rx * 0.3), h * (cy - ry * 1.15), w * (cx + rx * 0.35), h * (cy - ry * 0.9));
+    path.bezierCurveTo(w * (cx + rx * 0.85), h * (cy - ry * 0.7), w * (cx + rx * 1.05), h * (cy - ry * 0.25), w * (cx + rx * 1.05), h * cy);
+    path.bezierCurveTo(w * (cx + rx * 1.05), h * (cy + ry * 0.25), w * (cx + rx * 0.85), h * (cy + ry * 0.7), w * (cx + rx * 0.35), h * (cy + ry * 0.9));
+    path.bezierCurveTo(w * (cx - rx * 0.3), h * (cy + ry * 1.15), w * (cx - rx), h * (cy + ry * 1.05), w * (cx - rx), h * cy);
+    path.closePath();
+    path.moveTo(w * (cx - rx * 0.5) + w * 0.045, h * (cy - ry * 0.1));
+    path.ellipse(w * (cx - rx * 0.5), h * (cy - ry * 0.1), w * 0.045, h * 0.045, 0, 0, Math.PI * 2);
+    addFin(path, w * (cx + rx * 0.1), h * (cy - ry * 0.95), [[w * (cx + rx * 0.25), h * (cy - ry * 1.7)], [w * (cx + rx * 0.55), h * (cy - ry * 0.85)]]);
+    addFin(path, w * (cx + rx * 1.0), h * cy, [[w * (cx + rx * 1.35), h * (cy - ry * 0.9)], [w * (cx + rx * 1.10), h * cy], [w * (cx + rx * 1.35), h * (cy + ry * 0.9)]]);
+    addFin(path, w * (cx + rx * 0.15), h * (cy + ry * 0.85), [[w * (cx + rx * 0.05), h * (cy + ry * 1.5)], [w * (cx + rx * 0.40), h * (cy + ry * 0.75)]]);
+    for (const t of [0.20, 0.42, 0.64]) {
+      const sx = w * (cx - rx + rx * 2 * t);
+      path.moveTo(sx, h * (cy - ry * 0.9));
+      path.quadraticCurveTo(sx + w * 0.02, h * cy, sx, h * (cy + ry * 0.9));
+    }
     return path;
   },
 
-  // Акула — вытянутое торпедообразное тело с острым носом, высокий спинной
-  // плавник, асимметричный хвост (верхняя лопасть заметно больше нижней).
+  // Акула — веретенообразное тело, острая с обоих концов, высокий изогнутый
+  // спинной плавник, несимметричный хвост-полумесяц, жабры, глаз-точка.
   shark: (w, h) => {
     const path = new Path2D();
-    path.ellipse(w * 0.46, h * 0.48, w * 0.30, h * 0.14, 0, 0, Math.PI * 2);
-    addFin(path, w * 0.17, h * 0.46, [[w * 0.02, h * 0.48], [w * 0.17, h * 0.55]]);
-    addFin(path, w * 0.42, h * 0.35, [[w * 0.49, h * 0.05], [w * 0.57, h * 0.36]]);
-    addFin(path, w * 0.73, h * 0.49, [[w * 0.97, h * 0.14], [w * 0.83, h * 0.49], [w * 0.90, h * 0.58]]);
+    const cy = 0.52;
+    path.moveTo(w * 0.06, h * cy);
+    path.quadraticCurveTo(w * 0.25, h * (cy - 0.16), w * 0.55, h * (cy - 0.14));
+    path.quadraticCurveTo(w * 0.75, h * (cy - 0.12), w * 0.90, h * cy);
+    path.quadraticCurveTo(w * 0.75, h * (cy + 0.10), w * 0.55, h * (cy + 0.13));
+    path.quadraticCurveTo(w * 0.25, h * (cy + 0.15), w * 0.06, h * cy);
+    path.closePath();
+    path.moveTo(w * 0.42, h * (cy - 0.13));
+    path.quadraticCurveTo(w * 0.50, h * (cy - 0.42), w * 0.60, h * (cy - 0.14));
+    path.quadraticCurveTo(w * 0.52, h * (cy - 0.20), w * 0.44, h * (cy - 0.12));
+    path.closePath();
+    addFin(path, w * 0.86, h * cy, [[w * 0.99, h * (cy - 0.20)], [w * 0.90, h * cy], [w * 0.97, h * (cy + 0.10)]]);
+    path.moveTo(w * 0.20 + w * 0.02, h * (cy - 0.03));
+    path.ellipse(w * 0.20, h * (cy - 0.03), w * 0.02, h * 0.02, 0, 0, Math.PI * 2);
+    for (let i = 0; i < 3; i++) {
+      const gx = w * (0.34 + i * 0.035);
+      path.moveTo(gx, h * (cy - 0.05));
+      path.lineTo(gx, h * (cy + 0.08));
+    }
     return path;
   },
 
-  // Осьминог — круглая голова и «юбка» из щупалец-бугорков снизу.
+  // Осьминог — круглая голова с большими глазами и улыбкой, волнистые
+  // щупальца-ленты (с толщиной, а не тонкие линии), свисающие снизу.
   octopus: (w, h) => {
     const path = new Path2D();
-    path.ellipse(w * 0.5, h * 0.32, w * 0.26, h * 0.22, 0, 0, Math.PI * 2);
-    const legCount = 6;
+    path.ellipse(w * 0.5, h * 0.34, w * 0.26, h * 0.22, 0, 0, Math.PI * 2);
+    for (const ex of [0.40, 0.60]) {
+      path.moveTo(w * ex + w * 0.045, h * 0.30);
+      path.ellipse(w * ex, h * 0.30, w * 0.045, h * 0.05, 0, 0, Math.PI * 2);
+    }
+    const legCount = 7;
     for (let i = 0; i < legCount; i++) {
       const t = i / (legCount - 1);
-      const ax = w * (0.28 + t * 0.44);
-      addFin(path, ax, h * 0.48, [
-        [ax - w * 0.045, h * (0.78 + (i % 2 ? 0.05 : 0))],
-        [ax + w * 0.045, h * 0.48],
-      ]);
+      const ax = w * (0.24 + t * 0.52);
+      const ay = h * 0.50;
+      const dir = (i % 2 === 0) ? -1 : 1;
+      const lw = w * 0.032;
+      path.moveTo(ax - lw, ay);
+      path.bezierCurveTo(ax - lw - dir * w * 0.02, ay + h * 0.14, ax + dir * w * 0.06 - lw, ay + h * 0.22, ax - lw, ay + h * 0.34);
+      path.lineTo(ax + lw, ay + h * 0.34);
+      path.bezierCurveTo(ax + dir * w * 0.06 + lw, ay + h * 0.22, ax + lw - dir * w * 0.02, ay + h * 0.14, ax + lw, ay);
+      path.closePath();
     }
     return path;
   },
@@ -226,34 +264,52 @@ const FISH_SHAPES = {
     return path;
   },
 
-  // Краб — широкое приплюснутое тело, глаза-стебельки, две клешни, лапки по бокам.
+  // Краб — округлое тело, глаза на стебельках сверху, две округлые клешни
+  // (варежкой, с изгибом-«защипом»), лапки по бокам снизу.
   crab: (w, h) => {
     const path = new Path2D();
-    path.ellipse(w * 0.5, h * 0.52, w * 0.30, h * 0.19, 0, 0, Math.PI * 2);
-    path.moveTo(w * 0.40, h * 0.34);
-    path.ellipse(w * 0.40, h * 0.30, w * 0.035, h * 0.045, 0, 0, Math.PI * 2);
-    path.moveTo(w * 0.52, h * 0.32);
-    path.ellipse(w * 0.52, h * 0.27, w * 0.035, h * 0.045, 0, 0, Math.PI * 2);
-    path.moveTo(w * 0.20, h * 0.44);
-    path.ellipse(w * 0.20, h * 0.44, w * 0.11, h * 0.09, -0.3, 0, Math.PI * 2);
-    path.moveTo(w * 0.80, h * 0.44);
-    path.ellipse(w * 0.80, h * 0.44, w * 0.11, h * 0.09, 0.3, 0, Math.PI * 2);
+    path.ellipse(w * 0.5, h * 0.58, w * 0.27, h * 0.20, 0, 0, Math.PI * 2);
+    for (const ex of [0.42, 0.58]) {
+      path.moveTo(w * ex, h * 0.40);
+      path.lineTo(w * ex, h * 0.30);
+      path.moveTo(w * ex + w * 0.035, h * 0.27);
+      path.ellipse(w * ex, h * 0.27, w * 0.035, h * 0.045, 0, 0, Math.PI * 2);
+    }
+    const claw = (cx, cy, mirror) => {
+      const m = mirror ? -1 : 1;
+      path.moveTo(w * (cx - m * 0.02), h * (cy + 0.10));
+      path.bezierCurveTo(w * (cx - m * 0.10), h * (cy + 0.06), w * (cx - m * 0.14), h * (cy - 0.10), w * (cx - m * 0.06), h * (cy - 0.16));
+      path.bezierCurveTo(w * (cx + m * 0.02), h * (cy - 0.20), w * (cx + m * 0.10), h * (cy - 0.14), w * (cx + m * 0.08), h * (cy - 0.04));
+      path.bezierCurveTo(w * (cx + m * 0.06), h * (cy + 0.02), w * (cx + m * 0.02), h * (cy + 0.08), w * (cx - m * 0.02), h * (cy + 0.10));
+      path.closePath();
+    };
+    claw(0.22, 0.42, false);
+    claw(0.78, 0.42, true);
     for (const side of [-1, 1]) {
       for (let i = 0; i < 3; i++) {
-        const ax = w * (0.5 + side * (0.20 + i * 0.06));
-        addFin(path, ax, h * 0.66, [[ax + side * w * 0.03, h * 0.80]]);
+        const bx = w * (0.5 + side * (0.24 + i * 0.05));
+        const by = h * 0.68;
+        path.moveTo(bx, by);
+        path.lineTo(bx + side * w * 0.03, h * 0.78);
+        path.lineTo(bx + side * w * 0.06, h * 0.74);
       }
     }
     return path;
   },
 
-  // Дельфин — обтекаемое тело с «клювом», спинной плавник, хвостовой флюк.
+  // Дельфин — пухлое округлое тело (как на референсе), изогнутый хвостовой
+  // плавник сзади, маленький плавник снизу, небольшой глаз.
   dolphin: (w, h) => {
     const path = new Path2D();
-    path.ellipse(w * 0.47, h * 0.48, w * 0.30, h * 0.16, 0, 0, Math.PI * 2);
-    addFin(path, w * 0.18, h * 0.46, [[w * 0.02, h * 0.42], [w * 0.18, h * 0.54]]);
-    addFin(path, w * 0.46, h * 0.32, [[w * 0.52, h * 0.12], [w * 0.58, h * 0.34]]);
-    addFin(path, w * 0.75, h * 0.48, [[w * 0.96, h * 0.34], [w * 0.85, h * 0.48], [w * 0.96, h * 0.62]]);
+    const cx = 0.48, cy = 0.52, rx = 0.32, ry = 0.22;
+    path.ellipse(w * cx, h * cy, w * rx, h * ry, 0, 0, Math.PI * 2);
+    path.moveTo(w * (cx + rx * 0.85), h * (cy - ry * 0.3));
+    path.bezierCurveTo(w * (cx + rx * 1.3), h * (cy - ry * 0.9), w * (cx + rx * 1.5), h * (cy - ry * 1.3), w * (cx + rx * 1.25), h * (cy - ry * 0.55));
+    path.bezierCurveTo(w * (cx + rx * 1.15), h * (cy - ry * 0.35), w * (cx + rx * 0.95), h * (cy - ry * 0.15), w * (cx + rx * 0.85), h * (cy - ry * 0.3));
+    path.closePath();
+    addFin(path, w * (cx - rx * 0.1), h * (cy + ry * 0.85), [[w * (cx - rx * 0.35), h * (cy + ry * 1.3)], [w * (cx + rx * 0.25), h * (cy + ry * 0.85)]]);
+    path.moveTo(w * (cx - rx * 0.55) + w * 0.018, h * (cy - ry * 0.15));
+    path.ellipse(w * (cx - rx * 0.55), h * (cy - ry * 0.15), w * 0.018, h * 0.022, 0, 0, Math.PI * 2);
     return path;
   },
 
@@ -404,6 +460,7 @@ async function initCamera() {
   video.style.display = 'block';
   shotCanvas.style.display = 'none';
   shutterBtn.style.display = 'block';
+  document.getElementById('galleryBtn').style.display = 'block';
 
   if (!window.isSecureContext) {
     alert('Камера недоступна: браузер требует HTTPS (или localhost). Сейчас страница открыта по обычному http:// — попросите бэкенд/тимлида поднять HTTPS для теста камеры.');
@@ -536,12 +593,13 @@ function makeBackgroundTransparent(canvas, diffThreshold = 25) {
   ctx.putImageData(original, 0, 0);
 }
 
-shutterBtn.addEventListener('click', () => {
-  const w = video.videoWidth, h = video.videoHeight;
-  shotCanvas.width = w;
-  shotCanvas.height = h;
-  const sctx = shotCanvas.getContext('2d');
-  sctx.drawImage(video, 0, 0, w, h);
+// Общая обработка кадра — не важно, откуда он взялся: с живой камеры или
+// из файла, выбранного в галерее. drawSource — video/image/canvas, из
+// которого можно ctx.drawImage(...), sw/sh — его исходные ширина/высота.
+function finishScan(drawSource, sw, sh) {
+  shotCanvas.width = sw;
+  shotCanvas.height = sh;
+  shotCanvas.getContext('2d').drawImage(drawSource, 0, 0, sw, sh);
 
   // На сервер уходит СЫРОЕ фото листа целиком (JPEG, без обрезки и без
   // прозрачности) — бэкенд сам ищет край листа и вырезает рыбку
@@ -561,11 +619,34 @@ shutterBtn.addEventListener('click', () => {
   video.style.display = 'none';
   shotCanvas.style.display = 'block';
   shutterBtn.style.display = 'none';
+  document.getElementById('galleryBtn').style.display = 'none';
   scanPreviewBox.style.display = 'block';
   stopCamera();
+}
+
+shutterBtn.addEventListener('click', () => {
+  finishScan(video, video.videoWidth, video.videoHeight);
+});
+
+const galleryInput = document.getElementById('galleryInput');
+document.getElementById('galleryBtn').addEventListener('click', () => {
+  galleryInput.click();
+});
+galleryInput.addEventListener('change', () => {
+  const file = galleryInput.files && galleryInput.files[0];
+  galleryInput.value = ''; // чтобы выбор того же файла повторно тоже сработал
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    stopCamera(); // на телефоне выбор из галереи не глушит камеру сам по себе
+    finishScan(img, img.naturalWidth, img.naturalHeight);
+  };
+  img.onerror = () => alert('Не удалось открыть картинку, попробуйте другой файл');
+  img.src = URL.createObjectURL(file);
 });
 
 document.getElementById('retakeBtn').addEventListener('click', () => {
+  document.getElementById('galleryBtn').style.display = 'block';
   initCamera();
 });
 
