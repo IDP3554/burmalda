@@ -60,6 +60,7 @@ const screens = {
   color: document.getElementById('screen-color'),
   scan: document.getElementById('screen-scan'),
   status: document.getElementById('screen-status'),
+  aquarium: document.getElementById('screen-aquarium'),
 };
 
 function showScreen(name) {
@@ -88,6 +89,11 @@ document.querySelectorAll('.mode-card').forEach(card => {
     state.mode = card.dataset.mode;
     showScreen('fishtype');
   });
+});
+
+document.getElementById('toAquariumBtn').addEventListener('click', () => {
+  showScreen('aquarium');
+  initAquarium();
 });
 
 // ---------- Back links ----------
@@ -136,16 +142,143 @@ let drawing = false;
 
 let hasActiveClip = false;
 
-// Единый контур рыбки — используется и для отрисовки линии, и как область
-// обрезки (clip), чтобы кисть физически не могла закрасить что-то за пределами силуэта.
-function getFishPath(w, h) {
-  const path = new Path2D();
-  path.ellipse(w * 0.45, h * 0.45, w * 0.32, h * 0.2, 0, 0, Math.PI * 2);
-  path.moveTo(w * 0.75, h * 0.45);
-  path.lineTo(w * 0.95, h * 0.3);
-  path.lineTo(w * 0.95, h * 0.6);
+// Контур рыбки — используется и для отрисовки линии, и как область обрезки
+// (clip), чтобы кисть физически не могла закрасить что-то за пределами силуэта.
+// У каждого типа рыбы (state.fishType) — свой узнаваемый силуэт.
+
+// Хвост/плавник-«вилка»: одна точка крепления к телу + один-два кончика наружу.
+// Используется как общий кирпичик для хвостов, плавников, клешней, лапок и т.п.
+function addFin(path, ax, ay, tips) {
+  path.moveTo(ax, ay);
+  tips.forEach(([tx, ty]) => path.lineTo(tx, ty));
   path.closePath();
-  return path;
+}
+
+const FISH_SHAPES = {
+  // Обычная рыбка — базовый овал + хвост-вилка (как было изначально).
+  fish: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.45, h * 0.45, w * 0.32, h * 0.2, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.75, h * 0.45, [[w * 0.95, h * 0.3], [w * 0.95, h * 0.6]]);
+    return path;
+  },
+
+  // Рыба-клоун — округлое тело, спинной и брюшной плавники, раздвоенный хвост.
+  clownfish: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.46, h * 0.45, w * 0.30, h * 0.22, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.73, h * 0.45, [[w * 0.94, h * 0.28], [w * 0.85, h * 0.45], [w * 0.94, h * 0.62]]);
+    addFin(path, w * 0.42, h * 0.25, [[w * 0.50, h * 0.07], [w * 0.58, h * 0.27]]);
+    addFin(path, w * 0.40, h * 0.65, [[w * 0.46, h * 0.83], [w * 0.54, h * 0.63]]);
+    return path;
+  },
+
+  // Акула — вытянутое торпедообразное тело с острым носом, высокий спинной
+  // плавник, асимметричный хвост (верхняя лопасть заметно больше нижней).
+  shark: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.46, h * 0.48, w * 0.30, h * 0.14, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.17, h * 0.46, [[w * 0.02, h * 0.48], [w * 0.17, h * 0.55]]);
+    addFin(path, w * 0.42, h * 0.35, [[w * 0.49, h * 0.05], [w * 0.57, h * 0.36]]);
+    addFin(path, w * 0.73, h * 0.49, [[w * 0.97, h * 0.14], [w * 0.83, h * 0.49], [w * 0.90, h * 0.58]]);
+    return path;
+  },
+
+  // Осьминог — круглая голова и «юбка» из щупалец-бугорков снизу.
+  octopus: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.5, h * 0.32, w * 0.26, h * 0.22, 0, 0, Math.PI * 2);
+    const legCount = 6;
+    for (let i = 0; i < legCount; i++) {
+      const t = i / (legCount - 1);
+      const ax = w * (0.28 + t * 0.44);
+      addFin(path, ax, h * 0.48, [
+        [ax - w * 0.045, h * (0.78 + (i % 2 ? 0.05 : 0))],
+        [ax + w * 0.045, h * 0.48],
+      ]);
+    }
+    return path;
+  },
+
+  // Кит — очень крупное округлое тело, плоский широкий хвостовой флюк
+  // (шире и площе, чем у остальных рыб), маленький грудной плавник.
+  whale: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.44, h * 0.48, w * 0.38, h * 0.30, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.80, h * 0.50, [[w * 0.99, h * 0.40], [w * 0.90, h * 0.50], [w * 0.99, h * 0.60]]);
+    addFin(path, w * 0.40, h * 0.72, [[w * 0.30, h * 0.87], [w * 0.50, h * 0.74]]);
+    return path;
+  },
+
+  // Кальмар — вытянутая мантия с плавником-«стрелкой» сзади и свисающими щупальцами спереди.
+  squid: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.56, h * 0.40, w * 0.26, h * 0.20, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.78, h * 0.40, [[w * 0.95, h * 0.28], [w * 0.78, h * 0.53]]);
+    const tentacles = 4;
+    for (let i = 0; i < tentacles; i++) {
+      const ax = w * (0.24 + i * 0.045);
+      addFin(path, ax, h * 0.54, [
+        [ax - w * 0.025, h * (0.80 + i * 0.02)],
+        [ax + w * 0.035, h * 0.54],
+      ]);
+    }
+    return path;
+  },
+
+  // Краб — широкое приплюснутое тело, глаза-стебельки, две клешни, лапки по бокам.
+  crab: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.5, h * 0.52, w * 0.30, h * 0.19, 0, 0, Math.PI * 2);
+    path.moveTo(w * 0.40, h * 0.34);
+    path.ellipse(w * 0.40, h * 0.30, w * 0.035, h * 0.045, 0, 0, Math.PI * 2);
+    path.moveTo(w * 0.52, h * 0.32);
+    path.ellipse(w * 0.52, h * 0.27, w * 0.035, h * 0.045, 0, 0, Math.PI * 2);
+    path.moveTo(w * 0.20, h * 0.44);
+    path.ellipse(w * 0.20, h * 0.44, w * 0.11, h * 0.09, -0.3, 0, Math.PI * 2);
+    path.moveTo(w * 0.80, h * 0.44);
+    path.ellipse(w * 0.80, h * 0.44, w * 0.11, h * 0.09, 0.3, 0, Math.PI * 2);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const ax = w * (0.5 + side * (0.20 + i * 0.06));
+        addFin(path, ax, h * 0.66, [[ax + side * w * 0.03, h * 0.80]]);
+      }
+    }
+    return path;
+  },
+
+  // Дельфин — обтекаемое тело с «клювом», спинной плавник, хвостовой флюк.
+  dolphin: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.47, h * 0.48, w * 0.30, h * 0.16, 0, 0, Math.PI * 2);
+    addFin(path, w * 0.18, h * 0.46, [[w * 0.02, h * 0.42], [w * 0.18, h * 0.54]]);
+    addFin(path, w * 0.46, h * 0.32, [[w * 0.52, h * 0.12], [w * 0.58, h * 0.34]]);
+    addFin(path, w * 0.75, h * 0.48, [[w * 0.96, h * 0.34], [w * 0.85, h * 0.48], [w * 0.96, h * 0.62]]);
+    return path;
+  },
+
+  // Черепаха — круглый панцирь, маленькая голова, четыре ласты, хвостик.
+  turtle: (w, h) => {
+    const path = new Path2D();
+    path.ellipse(w * 0.52, h * 0.48, w * 0.30, h * 0.26, 0, 0, Math.PI * 2);
+    path.moveTo(w * 0.29, h * 0.46);
+    path.ellipse(w * 0.20, h * 0.46, w * 0.09, h * 0.08, 0, 0, Math.PI * 2);
+    path.moveTo(w * 0.32, h * 0.26);
+    path.ellipse(w * 0.30, h * 0.24, w * 0.10, h * 0.06, -0.4, 0, Math.PI * 2);
+    path.moveTo(w * 0.32, h * 0.70);
+    path.ellipse(w * 0.30, h * 0.72, w * 0.10, h * 0.06, 0.4, 0, Math.PI * 2);
+    path.moveTo(w * 0.72, h * 0.24);
+    path.ellipse(w * 0.70, h * 0.22, w * 0.10, h * 0.06, 0.4, 0, Math.PI * 2);
+    path.moveTo(w * 0.72, h * 0.72);
+    path.ellipse(w * 0.70, h * 0.74, w * 0.10, h * 0.06, -0.4, 0, Math.PI * 2);
+    addFin(path, w * 0.80, h * 0.48, [[w * 0.92, h * 0.46], [w * 0.80, h * 0.54]]);
+    return path;
+  },
+};
+
+function getFishPath(w, h) {
+  const shape = FISH_SHAPES[state.fishType] || FISH_SHAPES.fish;
+  return shape(w, h);
 }
 
 function initCanvas() {
@@ -461,7 +594,12 @@ function sendFish(imageDataUrl) {
       statusBox.innerHTML = `
         <div class="big-emoji">🐠</div>
         <div>Рыбка отправлена в аквариум!</div>
-        <button class="btn" id="againBtn">Ещё рыбку</button>`;
+        <button class="btn" id="watchBtn">Смотреть аквариум 🐠</button>
+        <button class="btn secondary" id="againBtn">Ещё рыбку</button>`;
+      document.getElementById('watchBtn').addEventListener('click', () => {
+        showScreen('aquarium');
+        initAquarium();
+      });
       document.getElementById('againBtn').addEventListener('click', resetFlow);
     })
     .catch(err => {
@@ -480,4 +618,101 @@ function resetFlow() {
   document.querySelectorAll('.fish-opt').forEach(o => o.classList.remove('selected'));
   toColoringBtn.disabled = true;
   showScreen('home');
+}
+
+// ===================================================================
+// Built-in aquarium (тот же сайт — ребёнку не нужно открывать вторую страницу).
+// Подключается к тому же серверу, что и отправка рыбок (адрес из serverUrl).
+// ===================================================================
+const aqua = { started: false, fishes: [], seen: new Set(), bubbles: [] };
+
+function aquaServerOrigin() {
+  try { return new URL(getServerUrl()).origin; } catch { return location.origin; }
+}
+
+function initAquarium() {
+  const canvas = document.getElementById('tankCanvas');
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+
+  if (aqua.started) return; // движок уже запущен — просто показываем экран
+  aqua.started = true;
+
+  const ctx2 = canvas.getContext('2d');
+  const HTTP = aquaServerOrigin();
+  const WS_URL = HTTP.replace(/^http/, 'ws') + '/ws/wall';
+
+  const newBubble = () => ({
+    x: Math.random() * canvas.width, y: canvas.height + Math.random() * canvas.height,
+    r: 2 + Math.random() * 5, sp: 0.4 + Math.random() * 1.2, sway: Math.random() * Math.PI * 2
+  });
+  aqua.bubbles = Array.from({ length: 30 }, newBubble);
+
+  function addFish(meta) {
+    if (aqua.seen.has(meta.fish_id)) return;
+    aqua.seen.add(meta.fish_id);
+    const img = new Image();
+    img.src = HTTP + meta.image_url;
+    const f = {
+      img, ready: false,
+      x: Math.random() * canvas.width,
+      baseY: 60 + Math.random() * Math.max(60, canvas.height - 180),
+      vx: (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.9),
+      phase: Math.random() * Math.PI * 2,
+      size: 90 + Math.random() * 60,
+      spawn: performance.now()
+    };
+    img.onload = () => { f.ready = true; };
+    aqua.fishes.push(f);
+    document.getElementById('tankCount').textContent = aqua.fishes.length;
+  }
+
+  function draw(t) {
+    const W = canvas.width, H = canvas.height;
+    const g = ctx2.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b4f6c'); g.addColorStop(1, '#04283e');
+    ctx2.fillStyle = g; ctx2.fillRect(0, 0, W, H);
+
+    ctx2.fillStyle = 'rgba(255,255,255,.35)';
+    for (const b of aqua.bubbles) {
+      b.y -= b.sp; b.sway += 0.03; b.x += Math.sin(b.sway) * 0.4;
+      if (b.y < -10) Object.assign(b, newBubble());
+      ctx2.beginPath(); ctx2.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx2.fill();
+    }
+
+    for (const f of aqua.fishes) {
+      f.x += f.vx;
+      if (f.x < -f.size) f.x = W + f.size;
+      if (f.x > W + f.size) f.x = -f.size;
+      const y = f.baseY + Math.sin(t / 700 + f.phase) * 14;
+      if (!f.ready) continue;
+      const grow = Math.min(1, (t - f.spawn) / 500);
+      const s = f.size * grow;
+      ctx2.save();
+      ctx2.translate(f.x, y);
+      if (f.vx > 0) ctx2.scale(-1, 1); // рыбка нарисована мордой влево
+      ctx2.globalAlpha = grow;
+      ctx2.drawImage(f.img, -s / 2, -s / 2, s, s);
+      ctx2.restore();
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  const dot = document.getElementById('tankDot');
+  const statusEl = document.getElementById('tankStatus');
+  function connect() {
+    const ws = new WebSocket(WS_URL);
+    ws.onopen = () => { dot.className = 'dot on'; statusEl.textContent = 'подключено'; };
+    ws.onmessage = (e) => {
+      try { const m = JSON.parse(e.data); if (m.type === 'new_fish') addFish(m); } catch {}
+    };
+    ws.onclose = () => { dot.className = 'dot off'; statusEl.textContent = 'переподключаюсь…'; setTimeout(connect, 1500); };
+    ws.onerror = () => ws.close();
+  }
+  connect();
+
+  // если WebSocket недоступен — разово подтянем очередь
+  fetch(HTTP + '/api/fish/queue').then(r => r.json()).then(l => l.forEach(addFish)).catch(() => {});
 }

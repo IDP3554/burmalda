@@ -121,6 +121,21 @@
     width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 13px;
   }
   .back-link { display: inline-block; margin-bottom: 10px; opacity: .8; font-size: 14px; cursor: pointer; }
+
+  /* ---- Aquarium (встроенный аквариум на этом же сайте) ---- */
+  #screen-aquarium { max-width: none; padding: 8px; }
+  .tank-wrap {
+    position: relative; border-radius: 16px; overflow: hidden;
+    height: calc(100vh - 170px); min-height: 320px;
+  }
+  #tankCanvas { display: block; width: 100%; height: 100%; }
+  .tank-hud {
+    position: absolute; top: 10px; left: 10px; font-size: 12px; line-height: 1.5;
+    background: rgba(0,0,0,.30); padding: 6px 10px; border-radius: 10px; pointer-events: none;
+  }
+  .tank-hud .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #888; margin-right: 5px; vertical-align: middle; }
+  .tank-hud .dot.on { background: #06d6a0; box-shadow: 0 0 8px #06d6a0; }
+  .tank-hud .dot.off { background: #e63946; }
 </style>
 </head>
 <body>
@@ -144,6 +159,8 @@
       <span class="label">Сфотографировать<br>рисунок на бумаге</span>
     </div>
   </div>
+
+  <button class="btn ghost" id="toAquariumBtn">🐠 Аквариум — смотреть рыбок</button>
 
   <div id="serverUrlBox">
     <div class="hint">🐳 Куда плыть рыбке? (адрес аквариума)</div>
@@ -209,6 +226,18 @@
   <div class="status-box" id="statusBox">
     <div class="spinner"></div>
     <div>Отправляем рыбку в аквариум...</div>
+  </div>
+</div>
+
+<!-- SCREEN 5: built-in aquarium (тот же сайт, никуда переходить не надо) -->
+<div class="screen" id="screen-aquarium">
+  <span class="back-link" data-back="home">← Назад</span>
+  <div class="tank-wrap">
+    <canvas id="tankCanvas"></canvas>
+    <div class="tank-hud">
+      <span class="dot" id="tankDot"></span><span id="tankStatus">подключаюсь…</span><br>
+      рыбок: <b id="tankCount">0</b>
+    </div>
   </div>
 </div>
 
