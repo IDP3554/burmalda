@@ -879,21 +879,18 @@ function makeDemoFish(nameOverride) {
   return fish;
 }
 
-// Авто-спавн 5 тестовых рыбок с задержкой (красиво появляются одна за другой)
-const autoNames = ['Немо', 'Дори', 'Марлин', 'Пузырь', 'Жемчуг'];
-autoNames.forEach((name, i) => {
-  setTimeout(() => {
-    makeDemoFish(name);
-    if (i === 0) showBanner('🐠 Тестовые рыбки загружены!');
-  }, 600 + i * 700);
-});
-
-// Клавиша D — добавить ещё одну
-document.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() !== 'd') return;
-  makeDemoFish();
-  showBanner('🐟 Новая демо рыбка (клавиша D)');
-});
+// Клавиша D — добавить демо-рыбку вручную. На публичном демо аквариум должен
+// стартовать пустым и наполняться только настоящими рыбками с WS/HTTP —
+// поэтому демо-режим активен только с ?debug=1 в адресной строке, иначе
+// нажатие D ничего не делает (не только автоспавна при загрузке больше нет,
+// но и сама клавиша по умолчанию неактивна).
+if (new URLSearchParams(location.search).has('debug')) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'd') return;
+    makeDemoFish();
+    showBanner('🐟 Новая демо рыбка (клавиша D)');
+  });
+}
 </script>
 </body>
 </html>
