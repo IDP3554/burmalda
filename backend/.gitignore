@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+storage/
+test_photo_result.png
+test_canvas_result.png
+stress_*_input.jpg
+stress_*_output.png
