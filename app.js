@@ -123,29 +123,52 @@ const COLORS = ['#e63946', '#f4a261', '#ffd166', '#06d6a0', '#118ab2', '#073b4c'
 let currentColor = COLORS[0];
 let drawing = false;
 
+let hasActiveClip = false;
+
+// Единый контур рыбки — используется и для отрисовки линии, и как область
+// обрезки (clip), чтобы кисть физически не могла закрасить что-то за пределами силуэта.
+function getFishPath(w, h) {
+  const path = new Path2D();
+  path.ellipse(w * 0.45, h * 0.45, w * 0.32, h * 0.2, 0, 0, Math.PI * 2);
+  path.moveTo(w * 0.75, h * 0.45);
+  path.lineTo(w * 0.95, h * 0.3);
+  path.lineTo(w * 0.95, h * 0.6);
+  path.closePath();
+  return path;
+}
+
 function initCanvas() {
   const wrapWidth = paintCanvas.parentElement.clientWidth;
   paintCanvas.width = wrapWidth;
-  paintCanvas.height = Math.round(wrapWidth * 1.1);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
-  drawFishOutline();
+  paintCanvas.height = Math.round(wrapWidth * 1.1); // сброс canvas — заодно снимает старый clip
+  hasActiveClip = false;
+  resetPaintCanvas();
   buildPalette();
 }
 
+function resetPaintCanvas() {
+  if (hasActiveClip) {
+    ctx.restore(); // снимаем предыдущий clip, иначе новый фон/контур обрежется по старой области
+    hasActiveClip = false;
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+  drawFishOutline();
+
+  // Обрезаем область рисования строго по контуру рыбки — красить "за линией" нельзя.
+  const path = getFishPath(paintCanvas.width, paintCanvas.height);
+  ctx.save();
+  ctx.clip(path);
+  hasActiveClip = true;
+}
+
 function drawFishOutline() {
-  // Simple placeholder fish silhouette so kids have something to color inside.
   const w = paintCanvas.width, h = paintCanvas.height;
+  const path = getFishPath(w, h);
   ctx.save();
   ctx.strokeStyle = '#333';
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(w * 0.45, h * 0.45, w * 0.32, h * 0.2, 0, 0, Math.PI * 2);
-  ctx.moveTo(w * 0.75, h * 0.45);
-  ctx.lineTo(w * 0.95, h * 0.3);
-  ctx.lineTo(w * 0.95, h * 0.6);
-  ctx.closePath();
-  ctx.stroke();
+  ctx.stroke(path);
   ctx.restore();
 }
 
@@ -200,18 +223,28 @@ function endDraw() { drawing = false; }
 ['mouseup', 'mouseleave', 'touchend'].forEach(ev => paintCanvas.addEventListener(ev, endDraw));
 
 document.getElementById('clearBtn').addEventListener('click', () => {
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
-  drawFishOutline();
+  resetPaintCanvas();
 });
 
 document.getElementById('sendColorBtn').addEventListener('click', () => {
-  const copy = document.createElement('canvas');
-  copy.width = paintCanvas.width;
-  copy.height = paintCanvas.height;
-  copy.getContext('2d').drawImage(paintCanvas, 0, 0);
-  makeBackgroundTransparent(copy);
-  sendFish(copy.toDataURL('image/png'));
+  // В режиме рисования мы точно знаем геометрию контура, поэтому не нужны
+  // пиксельные догадки: просто рисуем ТОЛЬКО внутренность силуэта (clip по пути).
+  // Всё, что снаружи контура — остаётся прозрачным (мы туда ничего не рисуем),
+  // а вся внутренность (включая незакрашенные белые места) — сохраняется целиком.
+  const w = paintCanvas.width, h = paintCanvas.height;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  const octx = out.getContext('2d');
+  const path = getFishPath(w, h);
+  octx.save();
+  octx.clip(path);
+  octx.drawImage(paintCanvas, 0, 0); // белый фон + краска внутри контура
+  octx.restore();
+  octx.strokeStyle = '#333';        // сам контур поверх — чёткая обводка края
+  octx.lineWidth = 3;
+  octx.stroke(path);
+  sendFish(out.toDataURL('image/png'));
 });
 
 // ===================================================================
