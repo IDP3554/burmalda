@@ -49,19 +49,29 @@ async def health():
 
 # --- Отдача статики: чтобы Сканер и Аквариум открывались с того же адреса, что и
 # API (нужно для деплоя на Railway/хостинг, где всё живёт на одном порту). ---
+# Cache-Control: no-cache (не no-store) — браузер всё равно кэширует файл, но
+# обязан проверить актуальность на сервере (If-None-Match/ETag) перед каждым
+# использованием, а не грузить заново с нуля. FileResponse сам выставляет
+# ETag/Last-Modified по mtime+size, так что revalidation работает "из коробки"
+# — этого достаточно, чтобы обычный Refresh (не Ctrl+Shift+R) подхватывал
+# новую версию сразу после правки файла и перезапуска бэкенда.
+STATIC_HEADERS = {"Cache-Control": "no-cache"}
+
+
 @app.get("/")
 async def site_index():
-    return FileResponse(SITE_DIR / "index.html")
+    return FileResponse(SITE_DIR / "index.html", headers=STATIC_HEADERS)
 
 
 @app.get("/app.js")
 async def site_appjs():
-    return FileResponse(SITE_DIR / "app.js", media_type="application/javascript")
+    return FileResponse(SITE_DIR / "app.js", media_type="application/javascript",
+                         headers=STATIC_HEADERS)
 
 
 @app.get("/aquarium.html")
 async def site_aquarium():
-    return FileResponse(SITE_DIR / "aquarium.html")
+    return FileResponse(SITE_DIR / "aquarium.html", headers=STATIC_HEADERS)
 
 
 @app.post("/api/fish")
