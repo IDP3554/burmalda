@@ -641,21 +641,38 @@ function addFish(meta) {
 
 // WebSocket
 let ws = null;
+let reconnectFailCount = 0;
+// После стольких неудачных попыток подряд (onclose без onopen между ними)
+// включаем HTTP-поллинг как временную подстраховку, не дожидаясь, пока WS
+// сдастся навсегда — сам WS-реконнект при этом продолжает пытаться в фоне.
+// 3 попытки * 3с задержка = ~9с до включения подстраховки — не мгновенно
+// (не дёргаемся на одиночный сетевой blip), но и не слишком долго для демо.
+const HTTP_FALLBACK_AFTER = 3;
+
 function connectWS() {
   try {
     ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => setStatus(true, 'подключено');
+    ws.onopen = () => {
+      reconnectFailCount = 0;
+      stopHttpPoll(); // WS ожил — HTTP-дубль источника данных больше не нужен
+      setStatus(true, 'подключено');
+    };
 
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if (data.fish_id || data.image_url) addFish(data);
+        // Контракт: неизвестные type нужно игнорировать, а не пытаться
+        // угадать по наличию полей — иначе будущий тип события с полем
+        // fish_id/image_url будет по ошибке принят за новую рыбку.
+        if (data.type === 'new_fish' && (data.fish_id || data.image_url)) addFish(data);
       } catch {}
     };
 
     ws.onclose = () => {
+      reconnectFailCount++;
       setStatus(false, 'переподключение…');
+      if (reconnectFailCount >= HTTP_FALLBACK_AFTER) startHttpPoll();
       setTimeout(connectWS, 3000);
     };
 
@@ -669,10 +686,16 @@ function connectWS() {
   }
 }
 
-// HTTP fallback polling
+// HTTP fallback polling — подстраховка на случай, если WS реально не может
+// подняться (не только синхронная ошибка конструктора, но и обрыв связи на
+// демо: сервер упал, не тот Wi-Fi и т.п.). Работает ПАРАЛЛЕЛЬНО с попытками
+// WS-реконнекта, а не вместо них — как только WS оживёт, останавливается.
 let lastFishId = null;
+let httpPollInterval = null;
+
 function startHttpPoll() {
-  setInterval(async () => {
+  if (httpPollInterval) return; // уже поллим, второй интервал не нужен
+  httpPollInterval = setInterval(async () => {
     try {
       const r = await fetch(HTTP + '/api/fish/latest');
       if (!r.ok) return;
@@ -686,6 +709,13 @@ function startHttpPoll() {
       setStatus(false, 'нет связи');
     }
   }, CFG.pollMs);
+}
+
+function stopHttpPoll() {
+  if (httpPollInterval) {
+    clearInterval(httpPollInterval);
+    httpPollInterval = null;
+  }
 }
 
 connectWS();
