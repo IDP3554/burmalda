@@ -13,14 +13,26 @@ rem corrupts REM lines into garbage "commands".
 
 cd /d "%~dp0backend"
 
+set HAD_VENV=0
 if exist ".venv\Scripts\activate.bat" (
+  set HAD_VENV=1
   call ".venv\Scripts\activate.bat"
 )
 
 where uvicorn >nul 2>nul
 if errorlevel 1 (
-  echo uvicorn not found. Dependencies are probably not installed yet - run once:
-  echo   cd backend ^&^& pip install -r requirements.txt
+  if "%HAD_VENV%"=="0" (
+    echo venv not found. Create it and install dependencies ^(once^):
+    echo   python -m venv backend\.venv
+    echo   backend\.venv\Scripts\activate
+    echo   pip install -r backend\requirements.txt
+  ) else (
+    echo backend\.venv found, but uvicorn is not installed in it ^(dependencies
+    echo were not installed, or the venv is broken^). Run:
+    echo   backend\.venv\Scripts\activate
+    echo   pip install -r backend\requirements.txt
+  )
+  echo ^(Or without a venv, globally: cd backend ^&^& pip install -r requirements.txt^)
   exit /b 1
 )
 

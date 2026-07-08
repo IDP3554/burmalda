@@ -11,15 +11,29 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/backend"
 
-if [ -f ".venv/bin/activate" ]; then
-  source .venv/bin/activate
-elif [ -f ".venv/Scripts/activate" ]; then
-  source .venv/Scripts/activate
+HAD_VENV=0
+if [ -d ".venv" ]; then
+  HAD_VENV=1
+  if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+  elif [ -f ".venv/Scripts/activate" ]; then
+    source .venv/Scripts/activate
+  fi
 fi
 
 if ! command -v uvicorn >/dev/null 2>&1; then
-  echo "uvicorn не найден. Похоже, зависимости ещё не установлены — один раз выполните:"
-  echo "  cd backend && pip install -r requirements.txt"
+  if [ "$HAD_VENV" = "0" ]; then
+    echo "venv не найден. Создайте его и поставьте зависимости (один раз):"
+    echo "  python -m venv backend/.venv"
+    echo "  source backend/.venv/bin/activate"
+    echo "  pip install -r backend/requirements.txt"
+  else
+    echo "backend/.venv найден, но uvicorn в нём не установлен (зависимости не"
+    echo "ставились или venv битый). Выполните:"
+    echo "  source backend/.venv/bin/activate"
+    echo "  pip install -r backend/requirements.txt"
+  fi
+  echo "(Можно и без venv, глобально: cd backend && pip install -r requirements.txt)"
   exit 1
 fi
 
