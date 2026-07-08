@@ -44,8 +44,9 @@
   /* Подсказка кормления */
   #feedhint {
     position: fixed; bottom: 14px; right: 16px;
-    color: rgba(200,240,255,0.4); font-size: 12px;
+    color: rgba(10,40,55,0.6); font-size: 12px;
     font-family: 'Segoe UI', system-ui, sans-serif;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.5);
     pointer-events: none;
   }
 
@@ -204,13 +205,13 @@ let causticT = 0;
 function drawCaustics() {
   causticT += 0.003;
   ctx.save();
-  ctx.globalAlpha = 0.06;
+  ctx.globalAlpha = 0.12;
   for (let i = 0; i < 8; i++) {
     const x = W * (0.1 + 0.1 * i) + Math.sin(causticT + i * 1.3) * 60;
     const y = -50 + Math.cos(causticT * 0.7 + i * 0.9) * 40;
     const grad = ctx.createLinearGradient(x, y, x + 30, H * 0.7);
-    grad.addColorStop(0, 'rgba(100,220,255,0.9)');
-    grad.addColorStop(1, 'rgba(100,220,255,0)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -228,10 +229,10 @@ function drawCaustics() {
 function drawFloor() {
   const floorY = H * 0.88;
 
-  // Песок
+  // Песок — светлый, солнечный, а не тёмная бездна
   const sandGrad = ctx.createLinearGradient(0, floorY, 0, H);
-  sandGrad.addColorStop(0, '#1a3a2a');
-  sandGrad.addColorStop(1, '#0d1f15');
+  sandGrad.addColorStop(0, '#f5dfa0');
+  sandGrad.addColorStop(1, '#e0c374');
   ctx.fillStyle = sandGrad;
   ctx.fillRect(0, floorY, W, H - floorY);
 
@@ -245,57 +246,292 @@ function drawFloor() {
     const ry = 3 + (i * 11) % 7;
     ctx.beginPath();
     ctx.ellipse(px, py, rx, ry, (i * 0.4), 0, Math.PI * 2);
-    const l = 20 + (i * 13) % 20;
-    ctx.fillStyle = `hsl(${160 + (i*23)%60},${20+(i*7)%30}%,${l}%)`;
+    const l = 55 + (i * 13) % 20;
+    ctx.fillStyle = `hsl(${30 + (i*23)%40},${25+(i*7)%25}%,${l}%)`;
     ctx.fill();
   }
   ctx.restore();
 
-  // Водоросли
-  drawSeaweed(W * 0.05, floorY, 60, '#1a6644', 0);
-  drawSeaweed(W * 0.18, floorY, 80, '#0d5c3a', 1.2);
-  drawSeaweed(W * 0.82, floorY, 70, '#1a6644', 0.7);
-  drawSeaweed(W * 0.92, floorY, 90, '#0a4a30', 2.1);
-  drawSeaweed(W * 0.5,  floorY, 55, '#156b42', 3.5);
+  // Домики — ананасовый и губчатый камень
+  drawPineappleHouse(W * 0.28, floorY);
+  drawSpongeHouse(W * 0.62, floorY);
+
+  // Морская звезда на песке
+  drawStarfish(W * 0.46, floorY - 8, 22, '#ff7f9c');
+
+  // Водоросли — покачиваются сильнее, если рядом курсор/палец
+  drawSeaweed(W * 0.05, floorY, 60, '#2fbf6e', 0);
+  drawSeaweed(W * 0.18, floorY, 45, '#22a35c', 1.2);
+  drawSeaweed(W * 0.82, floorY, 70, '#2fbf6e', 0.7);
+  drawSeaweed(W * 0.92, floorY, 90, '#1c8f4c', 2.1);
+  drawSeaweed(W * 0.5,  floorY, 40, '#3ad180', 3.5);
 
   // Кораллы
-  drawCoral(W * 0.12, floorY, '#e63946');
-  drawCoral(W * 0.75, floorY, '#f4a261');
-  drawCoral(W * 0.38, floorY, '#ffd166');
+  drawCoral(W * 0.12, floorY, '#ff6b81');
+  drawCoral(W * 0.85, floorY, '#ffa552');
+  drawCoral(W * 0.72, floorY, '#ffd166');
 }
 
-let weedT = 0;
-function drawSeaweed(x, baseY, h, color, phase) {
+// Ананасовый домик — мультяшный контур: чёрная обводка, круглое пузатое
+// тело, ромбовидная сетка только внутри контура (clip), корона из
+// заострённых листьев с собственной обводкой.
+function drawPineappleHouse(x, baseY) {
+  const w = 100, h = 118;
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
+  ctx.translate(x, baseY);
+
+  // тело — не идеальный овал, а слегка "пузатая книзу" мультяшная форма
+  const bodyPath = new Path2D();
+  bodyPath.moveTo(0, -h * 0.06);
+  bodyPath.bezierCurveTo(-w * 0.56, -h * 0.02, -w * 0.52, -h * 0.62, -w * 0.30, -h * 0.80);
+  bodyPath.bezierCurveTo(-w * 0.14, -h * 0.90, w * 0.14, -h * 0.90, w * 0.30, -h * 0.80);
+  bodyPath.bezierCurveTo(w * 0.52, -h * 0.62, w * 0.56, -h * 0.02, 0, -h * 0.06);
+  bodyPath.closePath();
+
+  ctx.fillStyle = '#f5a623';
+  ctx.fill(bodyPath);
+
+  // ромбовидная текстура ананаса, обрезанная по силуэту тела
+  ctx.save();
+  ctx.clip(bodyPath);
+  ctx.strokeStyle = 'rgba(150,80,10,0.55)';
+  ctx.lineWidth = 2;
+  for (let row = -1; row <= 8; row++) {
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.6, -h * 0.86 + row * 13);
+    ctx.lineTo(w * 0.6, -h * 0.86 + row * 13 + 11);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.6, -h * 0.86 + row * 13 + 11);
+    ctx.lineTo(w * 0.6, -h * 0.86 + row * 13);
+    ctx.stroke();
+  }
+  // мягкий блик слева, как на мультяшных объектах
+  ctx.fillStyle = 'rgba(255,240,200,0.28)';
   ctx.beginPath();
-  const sway = Math.sin(weedT + phase) * 12;
-  ctx.moveTo(x, baseY);
-  ctx.bezierCurveTo(
-    x + sway * 0.3, baseY - h * 0.33,
-    x - sway * 0.5, baseY - h * 0.66,
-    x + sway,       baseY - h
-  );
+  ctx.ellipse(-w * 0.22, -h * 0.5, w * 0.14, h * 0.28, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // обводка тела
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.stroke(bodyPath);
+
+  // круглая дверь с рамкой
+  ctx.fillStyle = '#4a2a10';
+  ctx.beginPath(); ctx.arc(-w * 0.05, -h * 0.20, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#1a1a1a'; ctx.stroke();
+  // окно-иллюминатор
+  ctx.fillStyle = '#bdeeff';
+  ctx.beginPath(); ctx.arc(w * 0.26, -h * 0.46, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 3; ctx.stroke();
+
+  // корона из листьев — треугольные, с обводкой, веером
+  const leafCount = 5;
+  for (let i = 0; i < leafCount; i++) {
+    const t = i / (leafCount - 1);
+    const dx = (t - 0.5) * w * 0.9;
+    const tilt = (t - 0.5) * 0.8;
+    const lh = 40 - Math.abs(t - 0.5) * 24;
+    ctx.save();
+    ctx.translate(dx, -h * 0.86);
+    ctx.rotate(tilt);
+    const leaf = new Path2D();
+    leaf.moveTo(0, 4);
+    leaf.quadraticCurveTo(9, -lh * 0.5, 0, -lh);
+    leaf.quadraticCurveTo(-9, -lh * 0.5, 0, 4);
+    ctx.fillStyle = '#2f9e4f';
+    ctx.fill(leaf);
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.stroke(leaf);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// Домик-губка — неровный "жёваный" силуэт из скруглённых бугров (не
+// идеальный овал), с мультяшной обводкой и порами разного размера.
+function drawSpongeHouse(x, baseY) {
+  const r = 48;
+  ctx.save();
+  ctx.translate(x, baseY - r * 0.68);
+
+  // Точки соединяем плавными кривыми (через середины отрезков), а не прямыми
+  // линиями — иначе получается гранёный многоугольник вместо мягкого бугра.
+  const bumps = 12;
+  const ring = [];
+  for (let i = 0; i < bumps; i++) {
+    const ang = (Math.PI * 2 * i) / bumps;
+    const wobble = 1 + 0.16 * Math.sin(ang * 3 + 1.4) + 0.09 * Math.cos(ang * 5);
+    ring.push([Math.cos(ang) * r * wobble, Math.sin(ang) * r * 0.82 * wobble]);
+  }
+  const path = new Path2D();
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(ring[bumps - 1], ring[0]);
+  path.moveTo(start[0], start[1]);
+  for (let i = 0; i < bumps; i++) {
+    const next = ring[(i + 1) % bumps];
+    const m = mid(ring[i], next);
+    path.quadraticCurveTo(ring[i][0], ring[i][1], m[0], m[1]);
+  }
+  path.closePath();
+
+  ctx.fillStyle = '#f7d349';
+  ctx.fill(path);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.stroke(path);
+
+  // поры внутри силуэта
+  ctx.save();
+  ctx.clip(path);
+  const holes = [[-20,-16,7],[12,-22,6],[22,4,8],[-10,16,6],[3,-4,5],[-26,8,5],[24,-8,4]];
+  ctx.fillStyle = '#d9a916';
+  for (const [hx, hy, hr] of holes) {
+    ctx.beginPath();
+    ctx.ellipse(hx, hy, hr, hr * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  for (const [hx, hy, hr] of holes) {
+    ctx.beginPath();
+    ctx.ellipse(hx, hy, hr, hr * 0.85, 0, 0, Math.PI * 2);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(26,26,26,0.5)';
+    ctx.stroke();
+  }
+
+  // круглая дверь
+  ctx.fillStyle = '#4a2a10';
+  ctx.beginPath();
+  ctx.arc(0, r * 0.5, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#1a1a1a';
   ctx.stroke();
   ctx.restore();
 }
 
+// Морская звезда — мультяшная обводка, мягко скруглённые лучи (не острые
+// зубцы), лёгкие пятнышки текстуры.
+function drawStarfish(x, y, r, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  const points = 5;
+  const path = new Path2D();
+  for (let i = 0; i <= points * 2; i++) {
+    const ang = (Math.PI / points) * i - Math.PI / 2;
+    const isTip = i % 2 === 0;
+    const rad = isTip ? r : r * 0.46;
+    // скругляем зубцы лёгким смещением второй контрольной точкой
+    const px = Math.cos(ang) * rad;
+    const py = Math.sin(ang) * rad * 0.8;
+    if (i === 0) path.moveTo(px, py);
+    else path.quadraticCurveTo(
+      Math.cos(ang - Math.PI / points / 2) * rad * 0.9,
+      Math.sin(ang - Math.PI / points / 2) * rad * 0.9 * 0.8,
+      px, py
+    );
+  }
+  path.closePath();
+
+  ctx.fillStyle = color;
+  ctx.fill(path);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.stroke(path);
+
+  // пятнышки текстуры + блик
+  ctx.fillStyle = 'rgba(200,40,90,0.35)';
+  for (let i = 0; i < 5; i++) {
+    const ang = (Math.PI * 2 / 5) * i - Math.PI / 2;
+    ctx.beginPath();
+    ctx.arc(Math.cos(ang) * r * 0.45, Math.sin(ang) * r * 0.36, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.18, -r * 0.16, r * 0.18, r * 0.1, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Курсор/палец рядом с водорослью — она сильнее раскачивается в ту сторону,
+// как будто отзывается на течение от движения руки. Каждая "водоросль" —
+// пучок из 3 широких изогнутых лент разной высоты (не одна тонкая линия),
+// с обводкой и градиентной заливкой — похоже на настоящую морскую траву,
+// а не на палку.
+let weedT = 0;
+let pointerX = -9999, pointerY = -9999;
+function drawSeaweed(x, baseY, h, color, phase) {
+  const dxp = 0, dyp = 0;
+  const pdx = x - pointerX, pdy = (baseY - h * 0.5) - pointerY;
+  const distToPointer = Math.sqrt(pdx * pdx + pdy * pdy);
+  let extraPush = 0;
+  if (distToPointer < 160) extraPush = (1 - distToPointer / 160) * 30;
+  const pushDir = pdx > 0 ? 1 : -1;
+
+  const blades = 3;
+  for (let b = 0; b < blades; b++) {
+    const bx = x + (b - 1) * 9;
+    const bh = h * (0.75 + 0.25 * Math.abs(1 - b));
+    const bw = 7 - b * 0.5;
+    let sway = Math.sin(weedT + phase + b * 0.6) * (10 + b * 2);
+    sway += pushDir * extraPush * (1 - b * 0.15);
+
+    const tipX = bx + sway;
+    const midX = bx + sway * 0.55;
+
+    ctx.save();
+    const grad = ctx.createLinearGradient(bx, baseY, bx, baseY - bh);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, '#eafce0');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = '#0f5c30';
+    ctx.lineWidth = 1.5;
+
+    const blade = new Path2D();
+    blade.moveTo(bx - bw, baseY);
+    blade.quadraticCurveTo(bx - bw * 0.7, baseY - bh * 0.5, midX - bw * 0.35, baseY - bh * 0.72);
+    blade.quadraticCurveTo(tipX - bw * 0.12, baseY - bh * 0.92, tipX, baseY - bh);
+    blade.quadraticCurveTo(tipX + bw * 0.12, baseY - bh * 0.92, midX + bw * 0.35, baseY - bh * 0.72);
+    blade.quadraticCurveTo(bx + bw * 0.7, baseY - bh * 0.5, bx + bw, baseY);
+    blade.closePath();
+
+    ctx.fill(blade);
+    ctx.stroke(blade);
+    ctx.restore();
+  }
+}
+
 function drawCoral(x, y, color) {
   ctx.save();
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = 'round';
+  const branches = [[0,-32],[11,-24],[-11,-24],[6,-48],[-6,-48]];
+  for (const [dx,dy] of branches) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + dx, y + dy);
+    ctx.stroke();
+  }
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  const branches = [[0,-30],[10,-22],[-10,-22],[5,-45],[-5,-45]];
+  ctx.lineWidth = 2.5;
   for (const [dx,dy] of branches) {
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + dx, y + dy);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(x + dx, y + dy, 3, 0, Math.PI * 2);
+    ctx.arc(x + dx, y + dy, 5, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -610,16 +846,31 @@ canvas.addEventListener('touchstart', (e) => {
   foods.push(new Food(t.clientX - rect.left, t.clientY - rect.top));
 }, {passive: false});
 
+// Водоросли "чувствуют" курсор/палец рядом — раскачиваются сильнее (см. drawSeaweed)
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  pointerX = e.clientX - rect.left;
+  pointerY = e.clientY - rect.top;
+});
+canvas.addEventListener('mouseleave', () => { pointerX = -9999; pointerY = -9999; });
+canvas.addEventListener('touchmove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches[0];
+  pointerX = t.clientX - rect.left;
+  pointerY = t.clientY - rect.top;
+}, {passive: true});
+
 
 // ═══════════════════════════════════════════════════════
 //  ФОНОВЫЙ ГРАДИЕНТ
 // ═══════════════════════════════════════════════════════
 function drawBackground() {
+  // Светлое весёлое "мультяшное" дно — солнечная вода, а не глубокая ночь.
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0,   '#03102a');
-  grad.addColorStop(0.4, '#062040');
-  grad.addColorStop(0.8, '#082a1a');
-  grad.addColorStop(1,   '#040e10');
+  grad.addColorStop(0,   '#7fe0f5');
+  grad.addColorStop(0.45,'#4fc3e8');
+  grad.addColorStop(0.8, '#2fa8d8');
+  grad.addColorStop(1,   '#1e8fc4');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 }
@@ -822,7 +1073,7 @@ function loop(ts) {
     ctx.save();
     ctx.font = '18px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(150,220,255,0.35)';
+    ctx.fillStyle = 'rgba(10,50,70,0.45)';
     ctx.fillText('Ожидаем рыбок от сканера…', W/2, H/2);
     ctx.restore();
   }
