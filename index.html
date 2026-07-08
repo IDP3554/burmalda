@@ -99,7 +99,11 @@
 
   /* ---- Camera ---- */
   .cam-wrap { position: relative; border-radius: 16px; overflow: hidden; background: #000; margin-top: 12px; }
-  video, #shotCanvas { width: 100%; display: block; }
+  video { width: 100%; display: block; }
+  /* #shotCanvas показывает превью ПОСЛЕ удаления фона (прозрачные пиксели) —
+     на чёрном фоне .cam-wrap это выглядело бы как сплошная чёрная дыра,
+     поэтому у самого канваса свой белый фон, сквозь прозрачность видно его. */
+  #shotCanvas { width: 100%; display: block; background: #fff; }
   .shutter {
     width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 5px solid #ffd166;
     margin: 16px auto 0; display: block; cursor: pointer;
