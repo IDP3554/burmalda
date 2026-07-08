@@ -60,6 +60,24 @@
     text-decoration: none; cursor: pointer;
   }
   #exitBtn:hover { background: rgba(0,10,30,0.75); border-color: rgba(100,200,255,0.4); }
+
+  /* Переход обратно на Сканер (см. index.html — то же самое, но в другую
+     сторону: "выезд" вниз/исчезновение перед навигацией, "въезд" сверху
+     при загрузке). Только HUD/exitBtn/feedhint — canvas с рыбками не уезжает,
+     это просто UI-обвязка поверх него. */
+  body.leaving #hud, body.leaving #exitBtn, body.leaving #feedhint {
+    animation: hudSlideDown 300ms ease-out forwards;
+  }
+  body.entering #hud, body.entering #exitBtn, body.entering #feedhint {
+    animation: hudSlideInDown 350ms ease-out both;
+  }
+  @keyframes hudSlideDown {
+    to { transform: translateY(32px); opacity: 0; }
+  }
+  @keyframes hudSlideInDown {
+    from { transform: translateY(-32px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
 </style>
 </head>
 <body>
@@ -76,6 +94,27 @@
 <div id="feedhint">🍎 клик — покормить рыбок</div>
 
 <script>
+// ═══════════════════════════════════════════════════════
+//  ПЕРЕХОД НА/С СКАНЕРА (см. app.js: goToAquarium/playEnterAnimation —
+//  тот же приём, зеркально: тут HUD/exitBtn/feedhint, а не header/.screen).
+// ═══════════════════════════════════════════════════════
+function playEnterAnimation() {
+  document.body.classList.remove('entering');
+  void document.body.offsetWidth;
+  document.body.classList.add('entering');
+}
+playEnterAnimation();
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) playEnterAnimation();
+});
+
+document.getElementById('exitBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  const href = e.currentTarget.getAttribute('href');
+  document.body.classList.add('leaving');
+  setTimeout(() => { window.location.href = href; }, 300);
+});
+
 // ═══════════════════════════════════════════════════════
 //  КОНФИГ
 // ═══════════════════════════════════════════════════════

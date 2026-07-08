@@ -18,6 +18,25 @@
   }
 
   header, .screen { position: relative; z-index: 1; }
+
+  /* Переход между Сканером и Стеной (aquarium.html) — переход через полную
+     навигацию (location.href), поэтому "выезд" — это transition ПЕРЕД самим
+     переходом (см. goToAquarium в app.js), а "въезд" — анимация при загрузке
+     страницы. Класс на body, а не на каждый элемент — проще держать header
+     и активный .screen синхронными. */
+  body.leaving header, body.leaving .screen.active {
+    animation: pageSlideUp 300ms ease-out forwards;
+  }
+  body.entering header, body.entering .screen.active {
+    animation: pageSlideInUp 350ms ease-out both;
+  }
+  @keyframes pageSlideUp {
+    to { transform: translateY(-32px); opacity: 0; }
+  }
+  @keyframes pageSlideInUp {
+    from { transform: translateY(32px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
   header { text-align: center; padding: 16px 12px 8px; }
   header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: .8; }

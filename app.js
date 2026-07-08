@@ -108,6 +108,34 @@ function showScreen(name) {
   screens[name].classList.add('active');
 }
 
+// Переход на aquarium.html — полная навигация браузера (не SPA-переключение
+// экрана), поэтому анимация "выезда" идёт ПЕРЕД самим location.href, с
+// задержкой на её длительность (см. @keyframes pageSlideUp в index.html).
+// Не трогаем историю/beforeunload — обычный клик по ссылке/href остаётся
+// обычной навигацией, поэтому history.back() с aquarium.html и назад сюда
+// продолжает работать штатно, без дополнительной логики.
+const AQUARIUM_TRANSITION_MS = 300;
+function goToAquarium() {
+  document.body.classList.add('leaving');
+  setTimeout(() => {
+    window.location.href = aquaServerOrigin() + '/aquarium.html';
+  }, AQUARIUM_TRANSITION_MS);
+}
+
+// "Въезд" — при обычной загрузке страницы, и при восстановлении из bfcache
+// (кнопка "Назад" с aquarium.html может вернуть сюда именно через bfcache,
+// а не через полную перезагрузку — тогда скрипты не перезапускаются, класс
+// нужно переигрывать вручную через pageshow/event.persisted).
+function playEnterAnimation() {
+  document.body.classList.remove('entering');
+  void document.body.offsetWidth; // форсируем reflow, чтобы анимация переигралась
+  document.body.classList.add('entering');
+}
+playEnterAnimation();
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) playEnterAnimation();
+});
+
 function getServerUrl() {
   return document.getElementById('serverUrl').value.trim();
 }
@@ -144,7 +172,7 @@ document.querySelectorAll('.mode-card').forEach(card => {
 document.getElementById('toAquariumBtn').addEventListener('click', () => {
   // aquarium.html — единственный production Wall-клиент (см. API_CONTRACT.md),
   // встроенный экран-аквариум ниже — только dev-инструмент (?dev-aquarium=1).
-  window.location.href = aquaServerOrigin() + '/aquarium.html';
+  goToAquarium();
 });
 
 // ---------- Back links ----------
@@ -783,7 +811,7 @@ function showSendSuccess() {
     <button class="btn" id="watchBtn">Смотреть аквариум 🐠</button>
     <button class="btn secondary" id="againBtn">Ещё рыбку</button>`;
   document.getElementById('watchBtn').addEventListener('click', () => {
-    window.location.href = aquaServerOrigin() + '/aquarium.html';
+    goToAquarium();
   });
   document.getElementById('againBtn').addEventListener('click', resetFlow);
 }
