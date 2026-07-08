@@ -12,41 +12,9 @@
     min-height: 100vh; color: #fff; overflow-x: hidden; position: relative;
   }
 
-  /* ---- Живой аквариум-фон ---- */
-  .ocean-bg {
-    position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none;
-  }
-  .ocean-bg::before {
-    /* лёгкие лучи света, падающие сверху */
-    content: ''; position: absolute; top: 0; left: 10%; width: 60%; height: 100%;
-    background: linear-gradient(200deg, rgba(255,255,255,.10), rgba(255,255,255,0) 55%);
-    transform: skewX(-12deg);
-  }
-  .bg-fish {
-    position: absolute; font-size: 32px; opacity: .55; filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
-    animation: swimAcross linear infinite;
-  }
-  .bg-fish.flip { transform: scaleX(-1); }
-  @keyframes swimAcross {
-    from { transform: translateX(-10vw) translateY(0); }
-    to   { transform: translateX(110vw) translateY(var(--bob, 20px)); }
-  }
-  .bubble {
-    position: absolute; bottom: -40px; border-radius: 50%;
-    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
-    animation: riseUp linear infinite;
-  }
-  @keyframes riseUp {
-    from { transform: translateY(0) translateX(0); opacity: .8; }
-    to   { transform: translateY(-100vh) translateX(var(--sway, 20px)); opacity: 0; }
-  }
-  .weed {
-    position: absolute; bottom: 0; font-size: 46px; opacity: .35; transform-origin: bottom center;
-    animation: sway 4s ease-in-out infinite;
-  }
-  @keyframes sway {
-    0%, 100% { transform: rotate(-6deg); }
-    50% { transform: rotate(6deg); }
+  /* ---- Живой аквариум-фон: canvas, та же эстетика, что у aquarium.html ---- */
+  #bgAquarium {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
   }
 
   header, .screen { position: relative; z-index: 1; }
@@ -54,7 +22,15 @@
   header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: .8; }
 
-  .screen { display: none; padding: 16px; max-width: 480px; margin: 0 auto; }
+  /* Полупрозрачные карточки поверх фонового аквариума — тот же blur-стиль,
+     что и HUD в aquarium.html (rgba + backdrop-filter), для консистентности. */
+  .screen {
+    display: none; padding: 16px; max-width: 480px; margin: 0 auto;
+    background: rgba(0,10,30,0.45);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(100,200,255,0.15);
+    border-radius: 20px;
+  }
   .screen.active { display: block; }
 
   /* ---- Home / mode select ---- */
@@ -144,7 +120,7 @@
 </head>
 <body>
 
-<div class="ocean-bg" id="oceanBg"></div>
+<canvas id="bgAquarium"></canvas>
 
 <header>
   <h1>🐠 Анимагия</h1>
