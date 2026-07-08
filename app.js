@@ -9,6 +9,51 @@ const state = {
   shotDataUrl: null // captured photo as data URL
 };
 
+// ---------- Живой фон-аквариум (декор) ----------
+function buildOceanBackground() {
+  const bg = document.getElementById('oceanBg');
+  if (!bg) return;
+
+  const FISH_EMOJIS = ['🐠', '🐟', '🐡', '🐬', '🦈', '🐙'];
+  const fishCount = 6;
+  for (let i = 0; i < fishCount; i++) {
+    const el = document.createElement('div');
+    el.className = 'bg-fish' + (Math.random() < 0.5 ? ' flip' : '');
+    el.textContent = FISH_EMOJIS[Math.floor(Math.random() * FISH_EMOJIS.length)];
+    el.style.top = (32 + Math.random() * 60) + 'vh';
+    el.style.fontSize = (22 + Math.random() * 26) + 'px';
+    el.style.setProperty('--bob', (Math.random() * 60 - 30) + 'px');
+    el.style.animationDuration = (18 + Math.random() * 22) + 's';
+    el.style.animationDelay = (-Math.random() * 20) + 's';
+    bg.appendChild(el);
+  }
+
+  const bubbleCount = 14;
+  for (let i = 0; i < bubbleCount; i++) {
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    const size = 4 + Math.random() * 14;
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.setProperty('--sway', (Math.random() * 40 - 20) + 'px');
+    el.style.animationDuration = (6 + Math.random() * 8) + 's';
+    el.style.animationDelay = (-Math.random() * 12) + 's';
+    bg.appendChild(el);
+  }
+
+  const weedPositions = [4, 18, 82, 94];
+  weedPositions.forEach((leftPct, i) => {
+    const el = document.createElement('div');
+    el.className = 'weed';
+    el.textContent = '🌿';
+    el.style.left = leftPct + 'vw';
+    el.style.animationDelay = (-i * 1.3) + 's';
+    bg.appendChild(el);
+  });
+}
+buildOceanBackground();
+
 const screens = {
   home: document.getElementById('screen-home'),
   fishtype: document.getElementById('screen-fishtype'),
@@ -161,8 +206,12 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 });
 
 document.getElementById('sendColorBtn').addEventListener('click', () => {
-  const dataUrl = paintCanvas.toDataURL('image/png');
-  sendFish(dataUrl);
+  const copy = document.createElement('canvas');
+  copy.width = paintCanvas.width;
+  copy.height = paintCanvas.height;
+  copy.getContext('2d').drawImage(paintCanvas, 0, 0);
+  makeBackgroundTransparent(copy);
+  sendFish(copy.toDataURL('image/png'));
 });
 
 // ===================================================================
@@ -252,6 +301,37 @@ function autoCropToDrawing(sourceCanvas, padding = 24, blockSize = 16, contrastT
   return cropped;
 }
 
+// Бумага освещена неравномерно (тень/градиент), поэтому один фиксированный порог
+// яркости не подходит — в тени бумага темнее, чем чистые светлые линии на свету.
+// Вместо этого сравниваем каждый пиксель с "размытой" (усреднённой по соседям)
+// версией того же изображения: если пиксель заметно темнее своего локального
+// окружения — это линия рисунка, иначе — фон бумаги, его делаем прозрачным.
+function makeBackgroundTransparent(canvas, diffThreshold = 25) {
+  const w = canvas.width, h = canvas.height;
+  const ctx = canvas.getContext('2d');
+  const original = ctx.getImageData(0, 0, w, h);
+
+  const small = document.createElement('canvas');
+  small.width = Math.max(1, Math.round(w * 0.08));
+  small.height = Math.max(1, Math.round(h * 0.08));
+  small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+
+  const blurred = document.createElement('canvas');
+  blurred.width = w;
+  blurred.height = h;
+  const bctx = blurred.getContext('2d');
+  bctx.drawImage(small, 0, 0, w, h); // растягиваем маленькую копию — получаем размытие
+  const blurredData = bctx.getImageData(0, 0, w, h).data;
+
+  const d = original.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const localBg = 0.299 * blurredData[i] + 0.587 * blurredData[i + 1] + 0.114 * blurredData[i + 2];
+    if (localBg - lum < diffThreshold) d[i + 3] = 0; // похоже на фон — прозрачный
+  }
+  ctx.putImageData(original, 0, 0);
+}
+
 shutterBtn.addEventListener('click', () => {
   const w = video.videoWidth, h = video.videoHeight;
   shotCanvas.width = w;
@@ -263,8 +343,9 @@ shutterBtn.addEventListener('click', () => {
   shotCanvas.width = cropped.width;
   shotCanvas.height = cropped.height;
   shotCanvas.getContext('2d').drawImage(cropped, 0, 0);
+  makeBackgroundTransparent(shotCanvas);
 
-  state.shotDataUrl = shotCanvas.toDataURL('image/jpeg', 0.9);
+  state.shotDataUrl = shotCanvas.toDataURL('image/png');
 
   video.style.display = 'none';
   shotCanvas.style.display = 'block';

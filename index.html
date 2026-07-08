@@ -6,11 +6,50 @@
 <title>Анимагия — Сканер</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
+  html, body {
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: linear-gradient(160deg, #04283e, #0b4f6c, #1c7293);
-    min-height: 100vh; color: #fff; overflow-x: hidden;
+    background: linear-gradient(180deg, #04283e 0%, #0b4f6c 45%, #157a9e 80%, #1c95b8 100%);
+    min-height: 100vh; color: #fff; overflow-x: hidden; position: relative;
   }
+
+  /* ---- Живой аквариум-фон ---- */
+  .ocean-bg {
+    position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none;
+  }
+  .ocean-bg::before {
+    /* лёгкие лучи света, падающие сверху */
+    content: ''; position: absolute; top: 0; left: 10%; width: 60%; height: 100%;
+    background: linear-gradient(200deg, rgba(255,255,255,.10), rgba(255,255,255,0) 55%);
+    transform: skewX(-12deg);
+  }
+  .bg-fish {
+    position: absolute; font-size: 32px; opacity: .55; filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
+    animation: swimAcross linear infinite;
+  }
+  .bg-fish.flip { transform: scaleX(-1); }
+  @keyframes swimAcross {
+    from { transform: translateX(-10vw) translateY(0); }
+    to   { transform: translateX(110vw) translateY(var(--bob, 20px)); }
+  }
+  .bubble {
+    position: absolute; bottom: -40px; border-radius: 50%;
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+    animation: riseUp linear infinite;
+  }
+  @keyframes riseUp {
+    from { transform: translateY(0) translateX(0); opacity: .8; }
+    to   { transform: translateY(-100vh) translateX(var(--sway, 20px)); opacity: 0; }
+  }
+  .weed {
+    position: absolute; bottom: 0; font-size: 46px; opacity: .35; transform-origin: bottom center;
+    animation: sway 4s ease-in-out infinite;
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg); }
+  }
+
+  header, .screen { position: relative; z-index: 1; }
   header { text-align: center; padding: 16px 12px 8px; }
   header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: .8; }
@@ -85,6 +124,8 @@
 </style>
 </head>
 <body>
+
+<div class="ocean-bg" id="oceanBg"></div>
 
 <header>
   <h1>🐠 Анимагия</h1>
