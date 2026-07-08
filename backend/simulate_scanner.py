@@ -22,7 +22,7 @@ import requests
 def main():
     parser = argparse.ArgumentParser(description="Эмулятор Сканера (по API_CONTRACT.md)")
     parser.add_argument("image", help="путь к файлу картинки (jpg/png)")
-    parser.add_argument("--server", default="http://127.0.0.1:8000", help="адрес сервера")
+    parser.add_argument("--server", default="http://127.0.0.1:3000", help="адрес сервера")
     parser.add_argument("--mode", default="scan", choices=["draw", "scan"])
     parser.add_argument("--fish-type", default="clownfish",
                          choices=["clownfish", "shark", "octopus", "whale",

@@ -1,0 +1,4 @@
+# start.sh должен всегда чекаутиться с LF, независимо от core.autocrlf у
+# разработчика — CRLF в шебанге (#!/usr/bin/env bash) ломает запуск на
+# Linux/macOS ("bad interpreter").
+*.sh text eol=lf
