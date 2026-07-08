@@ -437,6 +437,15 @@ document.getElementById('sendColorBtn').addEventListener('click', () => {
   out.height = h;
   const octx = out.getContext('2d');
   const path = getFishPath(w, h);
+
+  // Наши силуэты (FISH_SHAPES) рисуются мордой ВЛЕВО, а клиент «Стены»
+  // (aquarium.html) по умолчанию (без переворота) считает, что рыбка на
+  // картинке смотрит ВПРАВО — иначе она "плывёт задом наперёд". Зеркалим
+  // готовый экспорт по горизонтали, чтобы итоговый PNG соответствовал их
+  // соглашению; сам процесс раскраски (внутри paintCanvas) не трогаем.
+  octx.translate(w, 0);
+  octx.scale(-1, 1);
+
   octx.save();
   octx.clip(path);
   octx.drawImage(paintCanvas, 0, 0); // белый фон + краска внутри контура
@@ -841,7 +850,7 @@ function initAquarium() {
       const s = f.size * grow;
       ctx2.save();
       ctx2.translate(f.x, y);
-      if (f.vx > 0) ctx2.scale(-1, 1); // рыбка нарисована мордой влево
+      if (f.vx < 0) ctx2.scale(-1, 1); // экспорт из режима рисования теперь мордой вправо (см. sendColorBtn)
       ctx2.globalAlpha = grow;
       ctx2.drawImage(f.img, -s / 2, -s / 2, s, s);
       ctx2.restore();
