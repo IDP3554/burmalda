@@ -48,6 +48,18 @@
     font-family: 'Segoe UI', system-ui, sans-serif;
     pointer-events: none;
   }
+
+  /* Выход обратно в Сканер — новая рыбка */
+  #exitBtn {
+    position: fixed; top: 14px; right: 16px;
+    color: rgba(200,240,255,0.85); font-size: 13px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: rgba(0,10,30,0.5); backdrop-filter: blur(8px);
+    padding: 10px 16px; border-radius: 12px;
+    border: 1px solid rgba(100,200,255,0.2);
+    text-decoration: none; cursor: pointer;
+  }
+  #exitBtn:hover { background: rgba(0,10,30,0.75); border-color: rgba(100,200,255,0.4); }
 </style>
 </head>
 <body>
@@ -59,6 +71,7 @@
   рыбок: <b id="count">0</b>
 </div>
 
+<a id="exitBtn" href="/">← Новая рыбка</a>
 <div id="banner"></div>
 <div id="feedhint">🍎 клик — покормить рыбок</div>
 
