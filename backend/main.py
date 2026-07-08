@@ -59,11 +59,6 @@ async def site_appjs():
     return FileResponse(SITE_DIR / "app.js", media_type="application/javascript")
 
 
-@app.get("/aquarium.html")
-async def site_aquarium():
-    return FileResponse(SITE_DIR / "aquarium.html")
-
-
 @app.post("/api/fish")
 async def receive_fish(payload: FishPayload):
     """
