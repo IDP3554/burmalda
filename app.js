@@ -543,13 +543,20 @@ shutterBtn.addEventListener('click', () => {
   const sctx = shotCanvas.getContext('2d');
   sctx.drawImage(video, 0, 0, w, h);
 
+  // На сервер уходит СЫРОЕ фото листа целиком (JPEG, без обрезки и без
+  // прозрачности) — бэкенд сам ищет край листа и вырезает рыбку
+  // (см. API_CONTRACT.md, "Формат image по режимам"). Если обрезать и
+  // сделать фон прозрачным здесь, у серверного алгоритма не останется ни
+  // края листа для поиска четырёхугольника, ни красок вне контура для
+  // сегментации — пайплайн сломается на реальных фото.
+  state.shotDataUrl = shotCanvas.toDataURL('image/jpeg', 0.85);
+
+  // Дальше — только косметика превью на экране ребёнка, на отправку не влияет.
   const cropped = autoCropToDrawing(shotCanvas);
   shotCanvas.width = cropped.width;
   shotCanvas.height = cropped.height;
   shotCanvas.getContext('2d').drawImage(cropped, 0, 0);
   makeBackgroundTransparent(shotCanvas);
-
-  state.shotDataUrl = shotCanvas.toDataURL('image/png');
 
   video.style.display = 'none';
   shotCanvas.style.display = 'block';
