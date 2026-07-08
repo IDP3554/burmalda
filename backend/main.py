@@ -59,6 +59,11 @@ async def site_appjs():
     return FileResponse(SITE_DIR / "app.js", media_type="application/javascript")
 
 
+@app.get("/aquarium.html")
+async def site_aquarium():
+    return FileResponse(SITE_DIR / "aquarium.html")
+
+
 @app.post("/api/fish")
 async def receive_fish(payload: FishPayload):
     """
@@ -120,6 +125,16 @@ async def get_fish_image(fish_id: str):
 async def get_queue(since: float = 0):
     """Fallback на случай проблем с WebSocket: сайт может поллить каждые 1-2 сек."""
     return [f for f in fish_queue if f["created_at"] > since]
+
+
+@app.get("/api/fish/latest")
+async def get_latest_fish():
+    """Алиас-эндпоинт для клиентов Стены, которым удобнее один последний
+    объект рыбки, а не массив (в отличие от /api/fish/queue) — используется
+    HTTP-fallback поллингом в aquarium.html. Тот же формат полей, что и
+    элемент /api/fish/queue / сообщение WS. Пустая история -> {} (без
+    fish_id — клиент трактует это как "новой рыбки нет")."""
+    return fish_queue[-1] if fish_queue else {}
 
 
 @app.websocket("/ws/wall")

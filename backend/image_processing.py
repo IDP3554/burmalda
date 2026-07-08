@@ -11,7 +11,7 @@ def process_fish_image(raw_bytes: bytes, mode: str = "photo") -> dict:
     Возвращает dict:
       png_bytes -- PNG (RGBA) с рыбкой на прозрачном фоне
       avg_color -- средний цвет рыбки [r,g,b] (для доп. эффектов в клиенте
-                   Стены, например частиц/подсветки в Three.js)
+                   Стены, например подсветки/частиц вокруг рыбки)
       width, height -- итоговые размеры (всегда TARGET_SIZE x TARGET_SIZE)
     """
     if mode == "canvas":
