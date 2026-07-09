@@ -26,7 +26,7 @@ FISH_ID_RE = re.compile(r"^[0-9a-f]{8}$")
 # Статика (Сканер + Аквариум) лежит в корне репозитория, на уровень выше backend/.
 SITE_DIR = APP_DIR.parent
 
-app = FastAPI(title="Animagia Backend")
+app = FastAPI(title="Fishing Vision Backend")
 
 app.add_middleware(
     CORSMiddleware,
